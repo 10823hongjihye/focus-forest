@@ -1,11 +1,34 @@
 import { useState } from 'react';
 import { Leaf } from 'lucide-react';
 import { useAuth } from '../context/Auth';
+import { encodeAccountTicket } from '../lib/accounts';
 
 type Mode = 'login' | 'signup' | 'developer';
 
+function TicketBox({ label, ticket }: { label: string; ticket: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <textarea className="ticket-code" readOnly rows={3} value={ticket} />
+      <button
+        type="button"
+        className="btn-ghost"
+        onClick={() => {
+          void navigator.clipboard.writeText(ticket).then(
+            () => setCopied(true),
+            () => setCopied(false),
+          );
+        }}
+      >
+        {copied ? '복사했어요' : '코드 복사'}
+      </button>
+    </label>
+  );
+}
+
 export function AuthPage() {
-  const { loginUser, loginDeveloper, signup } = useAuth();
+  const { accounts, loginUser, loginDeveloper, signup, importTicket } = useAuth();
   const [mode, setMode] = useState<Mode>('login');
   const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
@@ -13,12 +36,16 @@ export function AuthPage() {
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [ticket, setTicket] = useState('');
+  const [approval, setApproval] = useState('');
   const [busy, setBusy] = useState(false);
+  const pending = accounts.filter((account) => account.status === 'pending');
 
   const reset = (next: Mode) => {
     setMode(next);
     setError('');
     setNotice('');
+    setTicket('');
     setPassword('');
     setConfirm('');
   };
@@ -40,10 +67,10 @@ export function AuthPage() {
   const submitSignup = async () => {
     setBusy(true);
     setError('');
-    const message = await signup({ email, nickname, password, confirm });
+    const result = await signup({ email, nickname, password, confirm });
     setBusy(false);
-    if (message) {
-      setError(message);
+    if (result.error) {
+      setError(result.error);
       return;
     }
     setNickname('');
@@ -51,7 +78,23 @@ export function AuthPage() {
     setPassword('');
     setConfirm('');
     setMode('login');
-    setNotice('가입 신청을 보냈어요. 개발자가 승낙하면 로그인할 수 있어요.');
+    setTicket(result.ticket ?? '');
+    setNotice(
+      result.already
+        ? '이 기기에 이미 가입 신청이 있어요. 아래 코드를 개발자에게 보내 주세요.'
+        : '가입 신청을 이 기기에 저장했어요. 아래 코드를 개발자에게 보내 주세요.',
+    );
+  };
+
+  const applyApproval = () => {
+    const message = importTicket(approval);
+    if (message) {
+      setError(message);
+      return;
+    }
+    setApproval('');
+    setError('');
+    setNotice('승낙을 반영했어요. 닉네임과 비밀번호로 로그인해 주세요.');
   };
 
   return (
@@ -63,7 +106,7 @@ export function AuthPage() {
         <h1>{mode === 'signup' ? '회원 가입' : mode === 'developer' ? '개발자 로그인' : '로그인'}</h1>
         <p>
           {mode === 'signup'
-            ? '가입 신청 후 개발자가 승낙하면 들어갈 수 있어요.'
+            ? '가입하면 이 기기에 코드가 생겨요. 그 코드를 개발자에게 보내 주세요.'
             : mode === 'developer'
               ? '비밀번호만 입력하면 개발자 화면으로 들어가요.'
               : '닉네임과 비밀번호로 포커스 포레스트에 들어가요.'}
@@ -72,6 +115,16 @@ export function AuthPage() {
 
       {notice && <p className="auth-notice">{notice}</p>}
       {error && <p className="auth-error" role="alert">{error}</p>}
+      {mode === 'login' && pending.length > 0 && !notice && (
+        <p className="muted">이 기기의 가입 신청은 개발자 화면에 자동으로 안 보여요. 아래 코드를 개발자에게 보내 주세요.</p>
+      )}
+      {mode === 'login' && ticket && <TicketBox label="개발자에게 보낼 가입 코드" ticket={ticket} />}
+      {mode === 'login' &&
+        pending
+          .filter((account) => encodeAccountTicket(account) !== ticket)
+          .map((account) => (
+            <TicketBox key={account.id} label={`${account.nickname} 가입 코드`} ticket={encodeAccountTicket(account)} />
+          ))}
 
       {mode === 'login' && (
         <form
@@ -97,6 +150,19 @@ export function AuthPage() {
           </label>
           <button type="submit" className="btn-primary" disabled={busy}>
             로그인
+          </button>
+          <label className="field">
+            <span>승낙 코드</span>
+            <textarea
+              className="ticket-code"
+              rows={3}
+              value={approval}
+              onChange={(event) => setApproval(event.target.value)}
+              placeholder="개발자가 보내 준 승낙 코드"
+            />
+          </label>
+          <button type="button" className="btn-ghost" onClick={applyApproval}>
+            승낙 코드 적용
           </button>
         </form>
       )}

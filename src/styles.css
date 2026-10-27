@@ -1284,6 +1284,13 @@ ul { padding: 0; list-style: none; }
 .auth-screen h1 { font-size: calc(28px * var(--font-scale)); letter-spacing: -0.04em; }
 .auth-form { display: flex; flex-direction: column; gap: 12px; }
 .auth-actions { margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 12px; }
+.ticket-code {
+  min-height: 72px;
+  resize: vertical;
+  font-size: calc(12px * var(--font-scale));
+  line-height: 1.45;
+  word-break: break-all;
+}
 .auth-notice { color: var(--accent-deep); font-size: calc(13px * var(--font-scale)); font-weight: 800; }
 .auth-error { color: var(--danger); font-size: calc(13px * var(--font-scale)); font-weight: 800; }
 .member-list { display: flex; flex-direction: column; }

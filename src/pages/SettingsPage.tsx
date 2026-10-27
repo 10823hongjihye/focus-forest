@@ -25,12 +25,14 @@ const TABS: Array<{ id: SettingsTab; label: string; icon: typeof Leaf }> = [
 
 export function SettingsPage() {
   const { data, updateSettings, applyTheme, showToast, resetAll, replayIntro, addCustomTracks, removeCustomTrack } = useAppState();
-  const { session, accounts, approveAccount, logout } = useAuth();
+  const { session, accounts, approveAccount, importTicket, logout } = useAuth();
   const { resetTimer } = useTimer();
   const player = usePlayer();
   const { go } = useNav();
   const [tab, setTab] = useState<SettingsTab>('theme');
   const [confirmReset, setConfirmReset] = useState(false);
+  const [signupCode, setSignupCode] = useState('');
+  const [approvalCode, setApprovalCode] = useState('');
   const [adderOpen, setAdderOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -349,7 +351,32 @@ export function SettingsPage() {
           {session?.role === 'developer' && (
             <div className="stack">
               <h3 className="section-label">회원 가입 신청</h3>
-              <p className="muted">다른 사용자의 가입을 확인하고 승낙하면 그 계정으로 로그인할 수 있어요.</p>
+              <p className="muted">다른 폰에서 가입한 신청은 그 기기에만 저장돼요. 친구가 보낸 가입 코드를 붙여 넣으면 여기에 보여요.</p>
+              <label className="field">
+                <span>가입 코드</span>
+                <textarea
+                  className="ticket-code"
+                  rows={3}
+                  value={signupCode}
+                  onChange={(event) => setSignupCode(event.target.value)}
+                  placeholder="친구가 보낸 가입 코드"
+                />
+              </label>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => {
+                  const message = importTicket(signupCode);
+                  if (message) {
+                    showToast(message);
+                    return;
+                  }
+                  setSignupCode('');
+                  showToast('가입 신청을 추가했어요.');
+                }}
+              >
+                신청 추가
+              </button>
               {accounts.length === 0 && <p className="muted">아직 가입한 사용자가 없어요.</p>}
               <ul className="member-list">
                 {accounts.map((account) => (
@@ -359,7 +386,17 @@ export function SettingsPage() {
                       <span>{account.email}</span>
                     </div>
                     {account.status === 'pending' ? (
-                      <button type="button" className="btn-ghost" onClick={() => approveAccount(account.id)}>
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        onClick={() => {
+                          const ticket = approveAccount(account.id);
+                          if (!ticket) return;
+                          setApprovalCode(ticket);
+                          void navigator.clipboard.writeText(ticket).catch(() => undefined);
+                          showToast('승낙했어요. 승낙 코드를 친구에게 보내 주세요.');
+                        }}
+                      >
                         승낙
                       </button>
                     ) : (
@@ -368,6 +405,12 @@ export function SettingsPage() {
                   </li>
                 ))}
               </ul>
+              {approvalCode && (
+                <label className="field">
+                  <span>친구에게 보낼 승낙 코드</span>
+                  <textarea className="ticket-code" readOnly rows={3} value={approvalCode} />
+                </label>
+              )}
             </div>
           )}
           <label className="field">

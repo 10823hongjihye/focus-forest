@@ -85,3 +85,40 @@ export function normalizeNickname(value: string): string {
 export function isEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
+
+function bytesToBase64Url(bytes: Uint8Array): string {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function base64UrlToBytes(value: string): Uint8Array | null {
+  try {
+    const padded = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
+    const binary = atob(padded);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+/** 다른 기기의 가입 신청을 개발자에게 넘기는 코드. 이 브라우저 밖으로는 자동으로 전달되지 않습니다. */
+export function encodeAccountTicket(account: Account): string {
+  const bytes = new TextEncoder().encode(JSON.stringify(account));
+  return `ff1.${bytesToBase64Url(bytes)}`;
+}
+
+export function decodeAccountTicket(raw: string): Account | null {
+  const token = raw.trim().replace(/\s+/g, '');
+  const payload = token.startsWith('ff1.') ? token.slice(4) : token;
+  const bytes = base64UrlToBytes(payload);
+  if (!bytes) return null;
+  try {
+    const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
+    return isAccount(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
