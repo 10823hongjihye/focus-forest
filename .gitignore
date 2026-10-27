@@ -1,0 +1,13 @@
+node_modules
+dist
+.DS_Store
+*.local
+.env
+.env.*
+!.env.example
+*.log
+.vite
+
+# 앱 코드에서 쓰지 않는 참고 사진
+KakaoTalk_Photo_*.png
+study forest.png
