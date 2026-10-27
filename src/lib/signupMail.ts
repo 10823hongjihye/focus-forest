@@ -48,16 +48,6 @@ export function sendSignupMail(account: Account): Promise<MailResult> {
   });
 }
 
-export function sendApprovalMail(account: Account): Promise<MailResult> {
-  const link = joinLink(encodeAccountTicket({ ...account, status: 'approved' }));
-  return postMail(account.email, {
-    _subject: '포커스 포레스트 가입이 승낙되었어요',
-    nickname: account.nickname,
-    message: '이 링크를 가입했던 폰에서 열면 로그인할 수 있어요.',
-    link,
-  });
-}
-
 const mailedKey = (id: string) => `ff-signup-mailed-${id}`;
 
 export async function deliverSignup(account: Account): Promise<MailResult> {

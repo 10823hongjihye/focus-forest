@@ -13,7 +13,8 @@ import {
   type Account,
   type Session,
 } from '../lib/accounts';
-import { deliverSignup, sendApprovalMail } from '../lib/signupMail';
+import { publishApprovedId, publishApprovedIds, loadApprovedIds } from '../lib/approvalSync';
+import { deliverSignup } from '../lib/signupMail';
 
 type SignupInput = {
   email: string;
@@ -31,9 +32,8 @@ export type SignupResult = {
 };
 
 type ApprovalResult = {
-  mailed: boolean;
-  activate: boolean;
-  ticket: string;
+  ok: boolean;
+  needsVerify: boolean;
 };
 
 type AuthValue = {
@@ -59,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [accounts, setAccounts] = useState<Account[]>(() => loadAccounts());
   const [linkNotice, setLinkNotice] = useState('');
   const joined = useRef(false);
+  const publishedApprovals = useRef(false);
 
   const writeAccounts = useCallback((next: Account[]) => {
     setAccounts(next);
@@ -93,6 +94,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [accounts, session]);
 
+  useEffect(() => {
+    if (session?.role !== 'developer' || publishedApprovals.current) return;
+    const ids = accounts.filter((account) => account.status === 'approved').map((account) => account.id);
+    if (ids.length === 0) return;
+    void publishApprovedIds(ids).then((result) => {
+      if (result.ok) publishedApprovals.current = true;
+    });
+  }, [accounts, session]);
+
   const enter = useCallback((next: Session) => {
     saveSession(next);
     setSession(next);
@@ -102,15 +112,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (nickname: string, password: string) => {
       const name = normalizeNickname(nickname);
       if (!name || !password) return '닉네임과 비밀번호를 입력해 주세요.';
-      const account = accounts.find((item) => item.nickname.toLowerCase() === name.toLowerCase());
+      const approvedIds = await loadApprovedIds();
+      let list = accounts;
+      if (approvedIds) {
+        let changed = false;
+        list = accounts.map((item) => {
+          if (item.status === 'approved' || !approvedIds.includes(item.id)) return item;
+          changed = true;
+          return { ...item, status: 'approved' as const };
+        });
+        if (changed) writeAccounts(list);
+      }
+      const account = list.find((item) => item.nickname.toLowerCase() === name.toLowerCase());
       if (!account) return '계정을 찾지 못했어요. 회원 가입을 먼저 해 주세요.';
       const hash = await hashPassword(account.nickname, password);
       if (hash !== account.passwordHash) return '비밀번호가 맞지 않아요.';
-      if (account.status !== 'approved') return '아직 승낙 전이에요. 개발자가 확인하면 로그인할 수 있어요.';
+      if (account.status !== 'approved') {
+        if (!approvedIds) return '승낙 여부를 확인하지 못했어요. 인터넷을 확인하고 다시 로그인해 주세요.';
+        return '아직 승낙 전이에요. 개발자가 확인하면 로그인할 수 있어요.';
+      }
       enter({ role: 'user', userId: account.id, nickname: account.nickname });
       return null;
     },
-    [accounts, enter],
+    [accounts, enter, writeAccounts],
   );
 
   const loginDeveloper = useCallback(
@@ -182,8 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!current) return null;
       const next: Account = { ...current, status: 'approved' };
       writeAccounts(accounts.map((account) => (account.id === id ? next : account)));
-      const mail = await sendApprovalMail(next);
-      return { mailed: mail.ok, activate: mail.activate, ticket: encodeAccountTicket(next) };
+      return publishApprovedId(id);
     },
     [accounts, writeAccounts],
   );

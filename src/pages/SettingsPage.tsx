@@ -31,7 +31,6 @@ export function SettingsPage() {
   const { go } = useNav();
   const [tab, setTab] = useState<SettingsTab>('theme');
   const [confirmReset, setConfirmReset] = useState(false);
-  const [approvalCode, setApprovalCode] = useState('');
   const [adderOpen, setAdderOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -350,7 +349,7 @@ export function SettingsPage() {
           {session?.role === 'developer' && (
             <div className="stack">
               <h3 className="section-label">회원 가입 신청</h3>
-              <p className="muted">다른 폰에서 가입하면 이메일로 신청이 와요. 메일의 링크를 열면 이 목록에 바로 들어와요. 승낙하면 친구 이메일로 로그인 링크가 가요.</p>
+              <p className="muted">다른 폰에서 가입하면 이메일로 신청이 와요. 메일의 링크를 열면 이 목록에 들어와요. 승낙하면 친구가 그 폰에서 바로 로그인할 수 있어요.</p>
               {accounts.length === 0 && <p className="muted">아직 가입한 사용자가 없어요.</p>}
               <ul className="member-list">
                 {accounts.map((account) => (
@@ -366,17 +365,15 @@ export function SettingsPage() {
                         onClick={() => {
                           void approveAccount(account.id).then((result) => {
                             if (!result) return;
-                            if (result.mailed) {
-                              setApprovalCode('');
-                              showToast('승낙 메일을 친구에게 보냈어요.');
+                            if (result.ok) {
+                              showToast('승낙했어요. 친구가 로그인하면 바로 들어갈 수 있어요.');
                               return;
                             }
-                            setApprovalCode(result.ticket);
-                            if (result.activate) {
-                              showToast('친구 메일로 확인 요청을 보냈어요. 친구가 메일을 한 번 확인해야 승낙 링크가 도착해요.');
+                            if (result.needsVerify) {
+                              showToast('학교 메일로 온 확인 메일을 한 번 연 다음, 승낙을 다시 눌러 주세요.');
                               return;
                             }
-                            showToast('메일을 보내지 못했어요. 아래 코드를 친구에게 보내 주세요.');
+                            showToast('승낙을 친구 폰에 전달하지 못했어요. 다시 눌러 주세요.');
                           });
                         }}
                       >
@@ -388,12 +385,6 @@ export function SettingsPage() {
                   </li>
                 ))}
               </ul>
-              {approvalCode && (
-                <label className="field">
-                  <span>메일이 안 갔을 때 친구에게 보낼 승낙 코드</span>
-                  <textarea className="ticket-code" readOnly rows={3} value={approvalCode} />
-                </label>
-              )}
             </div>
           )}
           <label className="field">

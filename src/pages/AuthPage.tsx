@@ -27,7 +27,7 @@ function TicketBox({ label, ticket }: { label: string; ticket: string }) {
 }
 
 export function AuthPage() {
-  const { loginUser, loginDeveloper, signup, importTicket, linkNotice } = useAuth();
+  const { loginUser, loginDeveloper, signup, linkNotice } = useAuth();
   const [mode, setMode] = useState<Mode>('login');
   const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
@@ -36,7 +36,6 @@ export function AuthPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [ticket, setTicket] = useState('');
-  const [approval, setApproval] = useState('');
   const [busy, setBusy] = useState(false);
 
   const reset = (next: Mode) => {
@@ -78,7 +77,7 @@ export function AuthPage() {
     setMode('login');
     setTicket(result.ticket ?? '');
     if (result.mailed) {
-      setNotice('가입 신청을 개발자 이메일로 보냈어요. 승낙되면 이 이메일의 링크를 열어 주세요.');
+      setNotice('가입 신청을 개발자 이메일로 보냈어요. 승낙되면 여기서 로그인하면 돼요.');
       return;
     }
     if (result.activate) {
@@ -86,17 +85,6 @@ export function AuthPage() {
       return;
     }
     setNotice(result.already ? '메일을 보내지 못했어요. 아래 코드를 개발자에게 보내 주세요.' : '메일을 보내지 못했어요. 아래 코드를 개발자에게 보내 주세요.');
-  };
-
-  const applyApproval = () => {
-    const message = importTicket(approval);
-    if (message) {
-      setError(message);
-      return;
-    }
-    setApproval('');
-    setError('');
-    setNotice('승낙을 반영했어요. 닉네임과 비밀번호로 로그인해 주세요.');
   };
 
   return (
@@ -144,19 +132,6 @@ export function AuthPage() {
           </label>
           <button type="submit" className="btn-primary" disabled={busy}>
             로그인
-          </button>
-          <label className="field">
-            <span>승낙 메일이 안 오면 코드</span>
-            <textarea
-              className="ticket-code"
-              rows={2}
-              value={approval}
-              onChange={(event) => setApproval(event.target.value)}
-              placeholder="개발자가 보내 준 승낙 코드"
-            />
-          </label>
-          <button type="button" className="btn-ghost" onClick={applyApproval}>
-            승낙 코드 적용
           </button>
         </form>
       )}
