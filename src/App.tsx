@@ -71,6 +71,7 @@ function useIntroLink() {
 
 function Shell() {
   const { data, toast } = useAppState();
+  const { linkNotice } = useAuth();
   const player = usePlayer();
   const { recap } = useTimer();
   const [page, setPage] = useState<PageId>('home');
@@ -125,6 +126,7 @@ function Shell() {
             <div className={cx('screen-scroll', showIntro && 'is-theme')}>{screen}</div>
             {!showIntro && <BottomNav />}
             <UpdateBanner />
+            {linkNotice && <div className="toast">{linkNotice}</div>}
             {toast && <div className="toast">{toast}</div>}
           </div>
         </div>

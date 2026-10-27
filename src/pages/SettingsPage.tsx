@@ -25,13 +25,12 @@ const TABS: Array<{ id: SettingsTab; label: string; icon: typeof Leaf }> = [
 
 export function SettingsPage() {
   const { data, updateSettings, applyTheme, showToast, resetAll, replayIntro, addCustomTracks, removeCustomTrack } = useAppState();
-  const { session, accounts, approveAccount, importTicket, logout } = useAuth();
+  const { session, accounts, approveAccount, logout } = useAuth();
   const { resetTimer } = useTimer();
   const player = usePlayer();
   const { go } = useNav();
   const [tab, setTab] = useState<SettingsTab>('theme');
   const [confirmReset, setConfirmReset] = useState(false);
-  const [signupCode, setSignupCode] = useState('');
   const [approvalCode, setApprovalCode] = useState('');
   const [adderOpen, setAdderOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -351,32 +350,7 @@ export function SettingsPage() {
           {session?.role === 'developer' && (
             <div className="stack">
               <h3 className="section-label">회원 가입 신청</h3>
-              <p className="muted">다른 폰에서 가입한 신청은 그 기기에만 저장돼요. 친구가 보낸 가입 코드를 붙여 넣으면 여기에 보여요.</p>
-              <label className="field">
-                <span>가입 코드</span>
-                <textarea
-                  className="ticket-code"
-                  rows={3}
-                  value={signupCode}
-                  onChange={(event) => setSignupCode(event.target.value)}
-                  placeholder="친구가 보낸 가입 코드"
-                />
-              </label>
-              <button
-                type="button"
-                className="btn-ghost"
-                onClick={() => {
-                  const message = importTicket(signupCode);
-                  if (message) {
-                    showToast(message);
-                    return;
-                  }
-                  setSignupCode('');
-                  showToast('가입 신청을 추가했어요.');
-                }}
-              >
-                신청 추가
-              </button>
+              <p className="muted">다른 폰에서 가입하면 이메일로 신청이 와요. 메일의 링크를 열면 이 목록에 바로 들어와요. 승낙하면 친구 이메일로 로그인 링크가 가요.</p>
               {accounts.length === 0 && <p className="muted">아직 가입한 사용자가 없어요.</p>}
               <ul className="member-list">
                 {accounts.map((account) => (
@@ -390,11 +364,20 @@ export function SettingsPage() {
                         type="button"
                         className="btn-ghost"
                         onClick={() => {
-                          const ticket = approveAccount(account.id);
-                          if (!ticket) return;
-                          setApprovalCode(ticket);
-                          void navigator.clipboard.writeText(ticket).catch(() => undefined);
-                          showToast('승낙했어요. 승낙 코드를 친구에게 보내 주세요.');
+                          void approveAccount(account.id).then((result) => {
+                            if (!result) return;
+                            if (result.mailed) {
+                              setApprovalCode('');
+                              showToast('승낙 메일을 친구에게 보냈어요.');
+                              return;
+                            }
+                            setApprovalCode(result.ticket);
+                            if (result.activate) {
+                              showToast('친구 메일로 확인 요청을 보냈어요. 친구가 메일을 한 번 확인해야 승낙 링크가 도착해요.');
+                              return;
+                            }
+                            showToast('메일을 보내지 못했어요. 아래 코드를 친구에게 보내 주세요.');
+                          });
                         }}
                       >
                         승낙
@@ -407,7 +390,7 @@ export function SettingsPage() {
               </ul>
               {approvalCode && (
                 <label className="field">
-                  <span>친구에게 보낼 승낙 코드</span>
+                  <span>메일이 안 갔을 때 친구에게 보낼 승낙 코드</span>
                   <textarea className="ticket-code" readOnly rows={3} value={approvalCode} />
                 </label>
               )}

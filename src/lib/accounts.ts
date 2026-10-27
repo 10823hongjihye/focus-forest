@@ -104,10 +104,39 @@ function base64UrlToBytes(value: string): Uint8Array | null {
   }
 }
 
-/** 다른 기기의 가입 신청을 개발자에게 넘기는 코드. 이 브라우저 밖으로는 자동으로 전달되지 않습니다. */
+/** 메일 링크와, 메일이 안 갔을 때의 가입 코드에 쓰는 계정 정보입니다. */
 export function encodeAccountTicket(account: Account): string {
   const bytes = new TextEncoder().encode(JSON.stringify(account));
   return `ff1.${bytesToBase64Url(bytes)}`;
+}
+
+export function applyAccountTicket(accounts: Account[], raw: string): { accounts: Account[]; error: string | null; account: Account | null } {
+  const account = decodeAccountTicket(raw);
+  if (!account) return { accounts, error: '코드를 읽지 못했어요. 코드 전체를 붙여 넣어 주세요.', account: null };
+  const same = accounts.find((item) => item.id === account.id);
+  if (same) {
+    if (same.passwordHash !== account.passwordHash) {
+      return { accounts, error: '이 코드는 저장된 계정과 맞지 않아요.', account: null };
+    }
+    const status: AccountStatus = same.status === 'approved' || account.status === 'approved' ? 'approved' : 'pending';
+    const next = { ...same, status };
+    return {
+      accounts: accounts.map((item) => (item.id === account.id ? next : item)),
+      error: null,
+      account: next,
+    };
+  }
+  if (accounts.some((item) => item.nickname.toLowerCase() === account.nickname.toLowerCase())) {
+    return { accounts, error: '이미 있는 닉네임이에요.', account: null };
+  }
+  if (accounts.some((item) => item.email === account.email)) {
+    return { accounts, error: '이미 가입된 이메일이에요.', account: null };
+  }
+  return {
+    accounts: [...accounts, account].sort((a, b) => a.createdAt - b.createdAt),
+    error: null,
+    account,
+  };
 }
 
 export function decodeAccountTicket(raw: string): Account | null {

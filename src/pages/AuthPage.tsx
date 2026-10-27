@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Leaf } from 'lucide-react';
 import { useAuth } from '../context/Auth';
-import { encodeAccountTicket } from '../lib/accounts';
 
 type Mode = 'login' | 'signup' | 'developer';
 
@@ -28,7 +27,7 @@ function TicketBox({ label, ticket }: { label: string; ticket: string }) {
 }
 
 export function AuthPage() {
-  const { accounts, loginUser, loginDeveloper, signup, importTicket } = useAuth();
+  const { loginUser, loginDeveloper, signup, importTicket, linkNotice } = useAuth();
   const [mode, setMode] = useState<Mode>('login');
   const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
@@ -39,7 +38,6 @@ export function AuthPage() {
   const [ticket, setTicket] = useState('');
   const [approval, setApproval] = useState('');
   const [busy, setBusy] = useState(false);
-  const pending = accounts.filter((account) => account.status === 'pending');
 
   const reset = (next: Mode) => {
     setMode(next);
@@ -79,11 +77,15 @@ export function AuthPage() {
     setConfirm('');
     setMode('login');
     setTicket(result.ticket ?? '');
-    setNotice(
-      result.already
-        ? '이 기기에 이미 가입 신청이 있어요. 아래 코드를 개발자에게 보내 주세요.'
-        : '가입 신청을 이 기기에 저장했어요. 아래 코드를 개발자에게 보내 주세요.',
-    );
+    if (result.mailed) {
+      setNotice('가입 신청을 개발자 이메일로 보냈어요. 승낙되면 이 이메일의 링크를 열어 주세요.');
+      return;
+    }
+    if (result.activate) {
+      setNotice('신청을 보냈어요. 개발자 메일함에서 FormSubmit 확인을 한 번 누르면 다음 신청부터 도착해요.');
+      return;
+    }
+    setNotice(result.already ? '메일을 보내지 못했어요. 아래 코드를 개발자에게 보내 주세요.' : '메일을 보내지 못했어요. 아래 코드를 개발자에게 보내 주세요.');
   };
 
   const applyApproval = () => {
@@ -106,7 +108,7 @@ export function AuthPage() {
         <h1>{mode === 'signup' ? '회원 가입' : mode === 'developer' ? '개발자 로그인' : '로그인'}</h1>
         <p>
           {mode === 'signup'
-            ? '가입하면 이 기기에 코드가 생겨요. 그 코드를 개발자에게 보내 주세요.'
+            ? '가입 신청은 개발자 이메일로 바로 전달돼요.'
             : mode === 'developer'
               ? '비밀번호만 입력하면 개발자 화면으로 들어가요.'
               : '닉네임과 비밀번호로 포커스 포레스트에 들어가요.'}
@@ -115,16 +117,8 @@ export function AuthPage() {
 
       {notice && <p className="auth-notice">{notice}</p>}
       {error && <p className="auth-error" role="alert">{error}</p>}
-      {mode === 'login' && pending.length > 0 && !notice && (
-        <p className="muted">이 기기의 가입 신청은 개발자 화면에 자동으로 안 보여요. 아래 코드를 개발자에게 보내 주세요.</p>
-      )}
-      {mode === 'login' && ticket && <TicketBox label="개발자에게 보낼 가입 코드" ticket={ticket} />}
-      {mode === 'login' &&
-        pending
-          .filter((account) => encodeAccountTicket(account) !== ticket)
-          .map((account) => (
-            <TicketBox key={account.id} label={`${account.nickname} 가입 코드`} ticket={encodeAccountTicket(account)} />
-          ))}
+      {linkNotice && <p className="auth-notice">{linkNotice}</p>}
+      {mode === 'login' && ticket && <TicketBox label="메일이 안 갔을 때 보낼 가입 코드" ticket={ticket} />}
 
       {mode === 'login' && (
         <form
@@ -152,10 +146,10 @@ export function AuthPage() {
             로그인
           </button>
           <label className="field">
-            <span>승낙 코드</span>
+            <span>승낙 메일이 안 오면 코드</span>
             <textarea
               className="ticket-code"
-              rows={3}
+              rows={2}
               value={approval}
               onChange={(event) => setApproval(event.target.value)}
               placeholder="개발자가 보내 준 승낙 코드"
