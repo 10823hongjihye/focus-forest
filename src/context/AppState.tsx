@@ -1,9 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AppData, CustomCategory, CustomTrack, DecorId, DiaryEntry, Settings, StudySession, ThemeId, Todo } from '../types';
-import { SHOP_ITEMS, SUBJECTS, THEME_PRESETS, isCustomCategoryId, isStickerId, nextCategoryTone } from '../lib/constants';
+import { SHOP_ITEMS, SUBJECTS, THEME_PRESETS, isCustomCategoryId, nextCategoryTone } from '../lib/constants';
+import { isStickerId } from '../lib/stickers';
 import { MAX_CUSTOM_TRACKS, MAX_TRACK_BYTES, clearTrackBlobs, deleteTrackBlob, isMp3File, saveTrackBlob, titleFromFile } from '../lib/customMusic';
+import { CUSTOM_STICKER_PREFIX, MAX_CUSTOM_STICKERS, MAX_STICKER_BYTES, clearStickerBlobs, deleteStickerBlob, hasPngSignature, isCustomStickerId, isPngFile, saveStickerBlob, stickerNameFromFile } from '../lib/customStickers';
 import { earnedLeaves, isClothId, isItemId, nextClothIds, outfitPrice, spentOutfitLeaves } from '../lib/outfits';
 import { createId, defaultData, hasStoredData, loadData, saveData } from '../lib/storage';
+import { uid } from '../lib/time';
 
 type AppStateValue = {
   data: AppData;
@@ -13,7 +16,7 @@ type AppStateValue = {
   applyTheme: (theme: ThemeId) => void;
   completeOnboarding: () => void;
   replayIntro: () => void;
-  saveStickers: (date: string, stickers: string[]) => void;
+  saveDiaryDecor: (date: string, patch: Partial<Pick<DiaryEntry, 'text' | 'stickers' | 'paper' | 'textX' | 'textY' | 'textSize' | 'textWidth' | 'textRotation' | 'textFont' | 'textAlign'>>) => void;
   buyDecor: (id: DecorId) => 'ok' | 'owned' | 'poor' | 'unknown';
   placeDecor: (id: DecorId) => void;
   addCategory: (name: string) => 'empty' | 'duplicate' | 'limit' | CustomCategory;
@@ -28,6 +31,8 @@ type AppStateValue = {
   deleteSession: (id: string) => void;
   addCustomTracks: (files: FileList | File[] | null) => Promise<void>;
   removeCustomTrack: (id: string) => void;
+  addCustomSticker: (file: File | null) => Promise<void>;
+  removeCustomSticker: (id: string) => void;
   wearCloth: (id: string) => void;
   toggleItem: (id: string) => void;
   buyOutfit: (id: string, liveSec: number) => 'ok' | 'owned' | 'poor' | 'unknown';
@@ -185,18 +190,52 @@ export function AppStateProvider({ children, nickname }: { children: ReactNode; 
       const rest = prev.diaries.filter((entry) => entry.date !== date);
       const stickers = current?.stickers ?? [];
       if (!trimmed && stickers.length === 0) return { ...prev, diaries: rest };
-      return { ...prev, diaries: [...rest, { date, text: trimmed, stickers, updatedAt: Date.now() }] };
+      return {
+        ...prev,
+        diaries: [...rest, {
+          date,
+          text: trimmed,
+          stickers,
+          paper: current?.paper ?? 'lines',
+          textX: current?.textX ?? 8,
+          textY: current?.textY ?? 12,
+          textSize: current?.textSize ?? 16,
+          textWidth: current?.textWidth ?? 70,
+          textRotation: current?.textRotation ?? 0,
+          textFont: current?.textFont ?? 'sans',
+          textAlign: current?.textAlign ?? 'left',
+          updatedAt: Date.now(),
+        }],
+      };
     });
   }, []);
 
-  const saveStickers = useCallback((date: string, stickers: string[]) => {
-    const clean = stickers.filter((id, index) => isStickerId(id) && stickers.indexOf(id) === index).slice(0, 8);
+  const saveDiaryDecor = useCallback((date: string, patch: Partial<Pick<DiaryEntry, 'text' | 'stickers' | 'paper' | 'textX' | 'textY' | 'textSize' | 'textWidth' | 'textRotation' | 'textFont' | 'textAlign'>>) => {
     setData((prev) => {
       const current = prev.diaries.find((entry) => entry.date === date);
       const rest = prev.diaries.filter((entry) => entry.date !== date);
-      const text = current?.text ?? '';
-      if (!text && clean.length === 0) return { ...prev, diaries: rest };
-      return { ...prev, diaries: [...rest, { date, text, stickers: clean, updatedAt: Date.now() }] };
+      const text = (patch.text !== undefined ? patch.text : current?.text ?? '').trim().slice(0, 500);
+      const stickers = (patch.stickers ?? current?.stickers ?? [])
+        .filter((item) => isStickerId(item.stickerId))
+        .slice(0, 20);
+      if (!text && stickers.length === 0) return { ...prev, diaries: rest };
+      return {
+        ...prev,
+        diaries: [...rest, {
+          date,
+          text,
+          stickers,
+          paper: patch.paper ?? current?.paper ?? 'lines',
+          textX: patch.textX ?? current?.textX ?? 8,
+          textY: patch.textY ?? current?.textY ?? 12,
+          textSize: patch.textSize ?? current?.textSize ?? 16,
+          textWidth: patch.textWidth ?? current?.textWidth ?? 70,
+          textRotation: patch.textRotation ?? current?.textRotation ?? 0,
+          textFont: patch.textFont ?? current?.textFont ?? 'sans',
+          textAlign: patch.textAlign ?? current?.textAlign ?? 'left',
+          updatedAt: Date.now(),
+        }],
+      };
     });
   }, []);
 
@@ -311,6 +350,51 @@ export function AppStateProvider({ children, nickname }: { children: ReactNode; 
     showToast('음악을 지웠어요.');
   }, [showToast]);
 
+  const addCustomSticker = useCallback(async (file: File | null) => {
+    if (!file) return;
+    if (!isPngFile(file) || !(await hasPngSignature(file))) {
+      showToast('투명한 PNG 파일만 올릴 수 있어요.');
+      return;
+    }
+    if (file.size > MAX_STICKER_BYTES) {
+      showToast('스티커는 2MB 이하만 올릴 수 있어요.');
+      return;
+    }
+    if (data.customStickers.length >= MAX_CUSTOM_STICKERS) {
+      showToast('내 스티커는 20개까지 올릴 수 있어요.');
+      return;
+    }
+    const id = `${CUSTOM_STICKER_PREFIX}${uid()}`;
+    try {
+      await saveStickerBlob(id, file);
+    } catch {
+      showToast('스티커를 저장하지 못했어요.');
+      return;
+    }
+    setData((prev) => {
+      if (prev.customStickers.some((item) => item.id === id) || prev.customStickers.length >= MAX_CUSTOM_STICKERS) return prev;
+      return { ...prev, customStickers: [...prev.customStickers, { id, name: stickerNameFromFile(file.name) }] };
+    });
+  }, [data.customStickers.length, showToast]);
+
+  const removeCustomSticker = useCallback((id: string) => {
+    if (!isCustomStickerId(id)) return;
+    let removed = false;
+    setData((prev) => {
+      if (!prev.customStickers.some((item) => item.id === id)) return prev;
+      removed = true;
+      return {
+        ...prev,
+        customStickers: prev.customStickers.filter((item) => item.id !== id),
+        diaries: prev.diaries
+          .map((entry) => ({ ...entry, stickers: entry.stickers.filter((item) => item.stickerId !== id) }))
+          .filter((entry) => entry.text || entry.stickers.length > 0),
+      };
+    });
+    if (!removed) return;
+    void deleteStickerBlob(id).catch(() => undefined);
+  }, []);
+
   const wearCloth = useCallback((id: string) => {
     if (!isClothId(id)) return;
     setData((current) => ({
@@ -356,6 +440,7 @@ export function AppStateProvider({ children, nickname }: { children: ReactNode; 
   const resetAll = useCallback(() => {
     setData(defaultData());
     void clearTrackBlobs().catch(() => undefined);
+    void clearStickerBlobs().catch(() => undefined);
   }, []);
 
   const diaryFor = useCallback((date: string) => data.diaries.find((entry) => entry.date === date), [data.diaries]);
@@ -369,7 +454,7 @@ export function AppStateProvider({ children, nickname }: { children: ReactNode; 
       applyTheme,
       completeOnboarding,
       replayIntro,
-      saveStickers,
+      saveDiaryDecor,
       buyDecor,
       placeDecor,
       addCategory,
@@ -384,6 +469,8 @@ export function AppStateProvider({ children, nickname }: { children: ReactNode; 
       deleteSession,
       addCustomTracks,
       removeCustomTrack,
+      addCustomSticker,
+      removeCustomSticker,
       wearCloth,
       toggleItem,
       buyOutfit,
@@ -398,7 +485,7 @@ export function AppStateProvider({ children, nickname }: { children: ReactNode; 
       applyTheme,
       completeOnboarding,
       replayIntro,
-      saveStickers,
+      saveDiaryDecor,
       buyDecor,
       placeDecor,
       addCategory,
@@ -413,6 +500,8 @@ export function AppStateProvider({ children, nickname }: { children: ReactNode; 
       deleteSession,
       addCustomTracks,
       removeCustomTrack,
+      addCustomSticker,
+      removeCustomSticker,
       wearCloth,
       toggleItem,
       buyOutfit,

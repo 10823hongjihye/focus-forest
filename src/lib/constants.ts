@@ -170,21 +170,8 @@ export const SHOP_ITEMS: Array<{ id: DecorId; name: string; price: number }> = [
   { id: 'shelf', name: '책장', price: 20 },
 ];
 
-export const STICKERS = [
-  { id: 'leaf', name: '잎' },
-  { id: 'star', name: '별' },
-  { id: 'bear', name: '곰' },
-  { id: 'note', name: '음표' },
-  { id: 'flower', name: '꽃' },
-  { id: 'cup', name: '컵' },
-] as const;
-
 export function isDecorId(value: string): value is DecorId {
   return SHOP_ITEMS.some((item) => item.id === value);
-}
-
-export function isStickerId(value: string): boolean {
-  return STICKERS.some((item) => item.id === value);
 }
 
 export function defaultTimer(mode: TimerMode = 'pomodoro', minutes = 50): TimerSnapshot {

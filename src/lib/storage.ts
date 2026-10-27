@@ -2,8 +2,11 @@ import type {
   AppData,
   CharacterId,
   CustomCategory,
+  CustomSticker,
   CustomTrack,
   DiaryEntry,
+  PaperStyle,
+  PlacedSticker,
   Settings,
   StudySession,
   SubjectId,
@@ -13,7 +16,10 @@ import type {
   Todo,
 } from '../types';
 import { normalizeHex } from './color';
-import { ACCENT_SWATCHES, BG_SWATCHES, DATA_KEY, HEARTBEAT_KEY, TIMER_KEY, categoryColorFits, defaultSettings, defaultTimer, isCustomCategoryId, isDecorId, isStickerId, nextCategoryTone } from './constants';
+import { ACCENT_SWATCHES, BG_SWATCHES, DATA_KEY, HEARTBEAT_KEY, TIMER_KEY, categoryColorFits, defaultSettings, defaultTimer, isCustomCategoryId, isDecorId, nextCategoryTone } from './constants';
+import { readDiaryAlign, readDiaryFont } from './diaryText';
+import { isCustomStickerId } from './customStickers';
+import { isStickerId } from './stickers';
 import { LAYER_OVER, LAYER_UNDER, isClothId, isItemId, outfitPrice } from './outfits';
 import { uid } from './time';
 
@@ -168,15 +174,30 @@ function readDecor(value: unknown): Settings['ownedDecor'] {
   return ids.includes('desk') ? [...new Set(ids)] : ['desk', ...new Set(ids)];
 }
 
-function readStickers(value: unknown): string[] {
+const PAPERS: PaperStyle[] = ['lines', 'dots', 'grid'];
+
+function readPaper(value: unknown): PaperStyle {
+  return typeof value === 'string' && PAPERS.includes(value as PaperStyle) ? (value as PaperStyle) : 'lines';
+}
+
+function readPlacedStickers(value: unknown): PlacedSticker[] {
   if (!Array.isArray(value)) return [];
-  const ids: string[] = [];
+  const items: PlacedSticker[] = [];
   for (const item of value) {
-    if (typeof item !== 'string' || !isStickerId(item) || ids.includes(item)) continue;
-    ids.push(item);
-    if (ids.length >= 8) break;
+    if (!isRecord(item) || typeof item.stickerId !== 'string' || !isStickerId(item.stickerId)) continue;
+    const id = typeof item.id === 'string' && item.id ? item.id.slice(0, 40) : uid();
+    if (items.some((placed) => placed.id === id)) continue;
+    items.push({
+      id,
+      stickerId: item.stickerId,
+      x: clampNumber(item.x, 0, 100, 46),
+      y: clampNumber(item.y, 0, 100, 42),
+      size: clampNumber(item.size, 48, 220, 96),
+      rotation: clampNumber(item.rotation, 0, 360, 0),
+    });
+    if (items.length >= 20) break;
   }
-  return ids;
+  return items;
 }
 
 function readHexList(value: unknown, presets: string[]): string[] {
@@ -248,12 +269,20 @@ function readDiary(value: unknown): DiaryEntry | null {
   if (!isRecord(value)) return null;
   if (typeof value.date !== 'string' || typeof value.text !== 'string') return null;
   const text = value.text.trim().slice(0, 500);
-  const stickers = readStickers(value.stickers);
+  const stickers = readPlacedStickers(value.stickers);
   if (!text && stickers.length === 0) return null;
   return {
     date: value.date,
     text,
     stickers,
+    paper: readPaper(value.paper),
+    textX: clampNumber(value.textX, 0, 80, 8),
+    textY: clampNumber(value.textY, 0, 80, 12),
+    textSize: clampNumber(value.textSize, 12, 64, 16),
+    textWidth: clampNumber(value.textWidth, 24, 92, 70),
+    textRotation: clampNumber(value.textRotation, 0, 360, 0),
+    textFont: readDiaryFont(value.textFont),
+    textAlign: readDiaryAlign(value.textAlign),
     updatedAt: typeof value.updatedAt === 'number' ? value.updatedAt : Date.now(),
   };
 }
@@ -284,8 +313,22 @@ function readSession(value: unknown): StudySession | null {
   return { id: value.id, date: value.date, subject: value.subject, durationSec, startedAt, endedAt };
 }
 
+function readCustomStickers(value: unknown): CustomSticker[] {
+  if (!Array.isArray(value)) return [];
+  const items: CustomSticker[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!isRecord(item) || typeof item.id !== 'string' || !isCustomStickerId(item.id) || seen.has(item.id)) continue;
+    seen.add(item.id);
+    const name = typeof item.name === 'string' ? item.name.trim().replace(/\s+/g, ' ').slice(0, 20) : '';
+    items.push({ id: item.id, name: name || '내 스티커' });
+    if (items.length >= 20) break;
+  }
+  return items;
+}
+
 export function defaultData(): AppData {
-  return { settings: defaultSettings(), categories: [], customTracks: [], todos: [], diaries: [], sessions: [], onboarded: false };
+  return { settings: defaultSettings(), categories: [], customTracks: [], customStickers: [], todos: [], diaries: [], sessions: [], onboarded: false };
 }
 
 export function loadData(): AppData {
@@ -321,6 +364,7 @@ export function loadData(): AppData {
       settings: readSettings(parsed.settings),
       categories: paintedCategories,
       customTracks: readCustomTracks(parsed.customTracks),
+      customStickers: readCustomStickers(parsed.customStickers),
       todos,
       diaries,
       sessions,

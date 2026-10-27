@@ -32,10 +32,31 @@ export type Todo = {
   createdAt: number;
 };
 
+export type PaperStyle = 'lines' | 'dots' | 'grid';
+export type DiaryFont = 'sans' | 'serif' | 'hand';
+export type DiaryAlign = 'left' | 'center' | 'right';
+
+export type PlacedSticker = {
+  id: string;
+  stickerId: string;
+  x: number;
+  y: number;
+  size: number;
+  rotation: number;
+};
+
 export type DiaryEntry = {
   date: string;
   text: string;
-  stickers: string[];
+  stickers: PlacedSticker[];
+  paper: PaperStyle;
+  textX: number;
+  textY: number;
+  textSize: number;
+  textWidth: number;
+  textRotation: number;
+  textFont: DiaryFont;
+  textAlign: DiaryAlign;
   updatedAt: number;
 };
 
@@ -78,10 +99,16 @@ export type Settings = {
   ownedOutfitIds: string[];
 };
 
+export type CustomSticker = {
+  id: string;
+  name: string;
+};
+
 export type AppData = {
   settings: Settings;
   categories: CustomCategory[];
   customTracks: CustomTrack[];
+  customStickers: CustomSticker[];
   todos: Todo[];
   diaries: DiaryEntry[];
   sessions: StudySession[];

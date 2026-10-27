@@ -7,7 +7,8 @@ import { TodoForm } from '../components/TodoForm';
 import { CheckButton, Modal } from '../components/ui';
 import { useAppState } from '../context/AppState';
 import { useTimer } from '../context/Timer';
-import { STICKERS, SUBJECTS, WEEKDAYS, categoryLabel, categoryTone } from '../lib/constants';
+import { SUBJECTS, WEEKDAYS, categoryLabel, categoryTone } from '../lib/constants';
+import { DiaryCanvas } from '../components/DiaryCanvas';
 import { cx } from '../lib/cx';
 import { addDays, formatDayTitle, formatHMS, isSameDay, monthGrid, startOfDay, startOfWeek, toDateKey } from '../lib/time';
 import { totalSeconds } from '../lib/stats';
@@ -287,18 +288,11 @@ export function CalendarPage() {
             </div>
           </div>
         ) : (
-          <>
-            <p className={diary?.text ? 'diary-text' : 'muted'}>{diary?.text || '오늘 공부한 마음을 남겨보세요.'}</p>
-            {diary && diary.stickers.length > 0 && (
-              <div className="sticker-placed">
-                {diary.stickers.map((id) => (
-                  <span key={id} className={`sticker s-${id}`}>
-                    {STICKERS.find((item) => item.id === id)?.name ?? id}
-                  </span>
-                ))}
-              </div>
-            )}
-          </>
+          diary ? (
+            <DiaryCanvas entry={diary} />
+          ) : (
+            <p className="muted">오늘 공부한 마음을 남겨보세요.</p>
+          )
         )}
         <button type="button" className="text-btn" onClick={() => setDecorating(true)}>
           다이어리 꾸미기
