@@ -1,7 +1,7 @@
 import { encodeAccountTicket, type Account } from './accounts';
 
 /** 가입 신청이 도착할 개발자 이메일. 친구 폰이 이 주소로 신청을 보냅니다. */
-export const ADMIN_EMAIL = '26-3721@swjb.hs.kr';
+export const ADMIN_EMAIL = 'hongjihye070309@gmail.com';
 
 export type MailResult = {
   ok: boolean;

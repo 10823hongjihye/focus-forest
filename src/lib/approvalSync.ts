@@ -1,4 +1,4 @@
-const APPROVAL_URL = 'https://kvdb.io/3PdMq1neM5qdFebXyxrczu/approved';
+const APPROVAL_URL = 'https://kvdb.io/EJrkyDzAwMWk4jTBYzmN4P/approved';
 
 export type ApprovalWrite = {
   ok: boolean;

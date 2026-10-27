@@ -370,7 +370,7 @@ export function SettingsPage() {
                               return;
                             }
                             if (result.needsVerify) {
-                              showToast('학교 메일로 온 확인 메일을 한 번 연 다음, 승낙을 다시 눌러 주세요.');
+                              showToast('지메일로 온 확인 메일을 한 번 연 다음, 승낙을 다시 눌러 주세요.');
                               return;
                             }
                             showToast('승낙을 친구 폰에 전달하지 못했어요. 다시 눌러 주세요.');
