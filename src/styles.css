@@ -148,6 +148,18 @@ ul { padding: 0; list-style: none; }
   flex: none;
 }
 .icon-btn.plain { border: 0; background: transparent; }
+.icon-btn.bell { position: relative; }
+.bell-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e23b3b;
+  box-shadow: 0 0 0 2px #fff;
+  pointer-events: none;
+}
 .row-between, .row-gap, .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .row-gap { justify-content: flex-start; flex-wrap: wrap; }
 .kicker, .muted { color: var(--muted); font-size: calc(13px * var(--font-scale)); font-weight: 600; }
@@ -702,10 +714,7 @@ ul { padding: 0; list-style: none; }
   object-fit: contain;
   pointer-events: none;
   transform-origin: var(--lp-hole-x) var(--lp-hole-y);
-  animation: lp-spin var(--lp-spin-duration) linear infinite;
-  animation-play-state: paused;
 }
-.lp-record.is-on { animation-play-state: running; }
 .lp-bear-orbit {
   position: absolute;
   left: var(--lp-record-x);
@@ -715,11 +724,7 @@ ul { padding: 0; list-style: none; }
   z-index: 6;
   pointer-events: none;
   transform-origin: calc(var(--lp-hole-x) + var(--lp-bear-orbit-x)) calc(var(--lp-hole-y) - var(--lp-bear-orbit-lift));
-  animation: lp-spin var(--lp-spin-duration) linear infinite;
-  animation-play-state: paused;
 }
-.lp-bear-orbit.is-on,
-.lp-bear-orbit.is-on .lp-bear { animation-play-state: running; }
 .lp-bear {
   position: absolute;
   left: var(--lp-bear-x);
@@ -727,9 +732,8 @@ ul { padding: 0; list-style: none; }
   width: var(--lp-bear-size);
   height: auto;
   pointer-events: none;
+  transform: translateX(-50%);
   transform-origin: 51% 52%;
-  animation: lp-bear-upright var(--lp-spin-duration) linear infinite;
-  animation-play-state: paused;
 }
 .lp-bear-base {
   display: block;
@@ -934,13 +938,6 @@ ul { padding: 0; list-style: none; }
   pointer-events: auto;
 }
 .lp-arm-hit:active { cursor: grabbing; }
-@keyframes lp-spin {
-  to { transform: rotate(360deg); }
-}
-@keyframes lp-bear-upright {
-  from { transform: translateX(-50%) rotate(0deg); }
-  to { transform: translateX(-50%) rotate(-360deg); }
-}
 .player {
   position: relative;
   z-index: 3;

@@ -3,6 +3,7 @@ import { Bell, Play } from 'lucide-react';
 import { Bear, Spark } from '../components/Bear';
 import { CheckButton, ProgressRing } from '../components/ui';
 import { useAppState } from '../context/AppState';
+import { useAuth } from '../context/Auth';
 import { useNav } from '../context/nav';
 import { useTimer } from '../context/Timer';
 import { cx } from '../lib/cx';
@@ -11,6 +12,8 @@ import { useStudiedSeconds } from '../hooks/useStudiedSeconds';
 
 export function HomePage() {
   const { data, toggleTodo } = useAppState();
+  const { session, accounts } = useAuth();
+  const pendingSignup = session?.role === 'developer' && accounts.some((account) => account.status === 'pending');
   const { snapshot } = useTimer();
   const { go } = useNav();
   const [bellOpen, setBellOpen] = useState(false);
@@ -49,7 +52,7 @@ export function HomePage() {
         <button
           type="button"
           className="icon-btn bell"
-          aria-label="알림"
+          aria-label={pendingSignup ? '알림, 가입 신청이 있어요' : '알림'}
           aria-expanded={bellOpen}
           onClick={(event) => {
             event.stopPropagation();
@@ -57,6 +60,7 @@ export function HomePage() {
           }}
         >
           <Bell size={18} />
+          {pendingSignup && <span className="bell-dot" aria-hidden />}
         </button>
         {bellOpen && (
           <div className="popover" onClick={(event) => event.stopPropagation()}>

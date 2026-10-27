@@ -71,6 +71,10 @@ export function LpPlayer() {
   const tipRef = useRef<HTMLSpanElement>(null);
   const stopRef = useRef<HTMLImageElement>(null);
   const turnRef = useRef<HTMLDivElement>(null);
+  const recordRef = useRef<HTMLImageElement>(null);
+  const orbitRef = useRef<HTMLDivElement>(null);
+  const bearRef = useRef<HTMLDivElement>(null);
+  const spinRef = useRef<Animation[] | null>(null);
   const dragRef = useRef<{ pointerId: number; x: number; y: number; moved: boolean; start: number; grab: number } | null>(null);
   const activeRef = useRef(active);
   const playingRef = useRef(player.playing);
@@ -104,6 +108,63 @@ export function LpPlayer() {
       '--lp-hole-x': `${LP_DESIGN.holeX}%`,
       '--lp-hole-y': `${LP_DESIGN.holeY}%`,
   } as CSSProperties;
+
+  useEffect(() => {
+    const record = recordRef.current;
+    const orbit = orbitRef.current;
+    const bear = bearRef.current;
+    if (!record || !orbit || !bear) return;
+    const timing: KeyframeAnimationOptions = {
+      duration: LP_DESIGN.spinSeconds * 1000,
+      iterations: Infinity,
+      easing: 'linear',
+    };
+    const spin: Keyframe[] = [{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }];
+    const upright: Keyframe[] = [
+      { transform: 'translateX(-50%) rotate(0deg)' },
+      { transform: 'translateX(-50%) rotate(-360deg)' },
+    ];
+    for (const el of [record, orbit, bear]) {
+      for (const anim of el.getAnimations()) anim.cancel();
+    }
+    const animations = [record.animate(spin, timing), orbit.animate(spin, timing), bear.animate(upright, timing)];
+    spinRef.current = animations;
+    let dropped = false;
+    const apply = () => {
+      if (dropped) return;
+      const running = activeRef.current;
+      for (const anim of animations) {
+        if (running) {
+          const time = anim.currentTime;
+          anim.play();
+          if (time != null) anim.currentTime = time;
+        } else {
+          anim.pause();
+        }
+      }
+    };
+    // iPad Safari는 애니메이션을 만들자마자 멈추면, 이후 play()를 무시합니다.
+    requestAnimationFrame(apply);
+    return () => {
+      dropped = true;
+      if (spinRef.current === animations) spinRef.current = null;
+      for (const anim of animations) anim.cancel();
+    };
+  }, []);
+
+  useEffect(() => {
+    const animations = spinRef.current;
+    if (!animations) return;
+    for (const anim of animations) {
+      if (active) {
+        const time = anim.currentTime;
+        anim.play();
+        if (time != null) anim.currentTime = time;
+      } else {
+        anim.pause();
+      }
+    }
+  }, [active]);
 
   const stopMusic = useRef(() => undefined as void);
   const playMusic = useRef(() => undefined as void);
@@ -241,10 +302,10 @@ export function LpPlayer() {
   return (
     <div className="lp" style={designStyle} aria-label="레코드 플레이어">
       <div className="lp-turn" ref={turnRef}>
-        <img className={cx('lp-record', active && 'is-on')} src={recordSrc} alt="" draggable={false} />
+        <img ref={recordRef} className="lp-record" src={recordSrc} alt="" draggable={false} />
       </div>
-      <div className={cx('lp-bear-orbit', active && 'is-on')}>
-        <div className="lp-bear">
+      <div ref={orbitRef} className="lp-bear-orbit">
+        <div ref={bearRef} className="lp-bear">
           <img className="lp-bear-base" src={characterArt(data.settings.character).record} alt="" draggable={false} />
           <OutfitLayers where="record" clothIds={clothIds} itemIds={itemIds} />
         </div>
