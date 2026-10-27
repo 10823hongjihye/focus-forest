@@ -1341,6 +1341,34 @@ input[type="range"] { accent-color: var(--accent); width: 100%; padding: 0; }
   overflow: auto;
 }
 .sheet h2 { font-size: calc(18px * var(--font-scale)); }
+.update-banner {
+  position: absolute;
+  z-index: 45;
+  left: 12px;
+  right: 12px;
+  top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #314036;
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+.update-banner p { margin: 0; flex: 1; min-width: 160px; font-size: calc(13px * var(--font-scale)); font-weight: 750; }
+.update-actions { display: flex; gap: 6px; }
+.update-banner button {
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: transparent;
+  color: #fff;
+  font-weight: 800;
+}
+.update-banner button.is-on { background: #fff; color: #314036; }
 .toast {
   position: absolute;
   left: 50%;

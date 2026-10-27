@@ -9,6 +9,7 @@ import { NavContext } from './context/nav';
 import { PlayerProvider, usePlayer } from './context/Player';
 import { TimerProvider, useTimer } from './context/Timer';
 import { BottomNav } from './components/BottomNav';
+import { UpdateBanner } from './components/UpdateBanner';
 import { SceneDecor } from './components/Illustrations';
 import { ShellContext } from './components/shell';
 import { CalendarPage } from './pages/CalendarPage';
@@ -123,6 +124,7 @@ function Shell() {
           <div className="shell" ref={setShellEl}>
             <div className={cx('screen-scroll', showIntro && 'is-theme')}>{screen}</div>
             {!showIntro && <BottomNav />}
+            <UpdateBanner />
             {toast && <div className="toast">{toast}</div>}
           </div>
         </div>
