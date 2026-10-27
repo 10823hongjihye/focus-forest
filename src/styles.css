@@ -1296,12 +1296,14 @@ ul { padding: 0; list-style: none; }
 .member-list { display: flex; flex-direction: column; }
 .member-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
   padding: 10px 0;
   border-top: 1px solid var(--border);
 }
+.member-facts { min-width: 0; }
+.member-actions { display: flex; flex-direction: column; gap: 6px; flex: none; }
 .member-row strong, .member-row span { display: block; }
 .member-row span { color: var(--muted); font-size: calc(12px * var(--font-scale)); font-weight: 650; }
 .member-row em { font-style: normal; color: var(--accent-deep); font-size: calc(12px * var(--font-scale)); font-weight: 800; }

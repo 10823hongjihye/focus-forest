@@ -11,6 +11,8 @@ export type Account = {
   email: string;
   nickname: string;
   passwordHash: string;
+  /** 새로 가입한 계정만 관리자 화면에서 볼 수 있습니다. 예전 가입은 해시만 남아 있습니다. */
+  password?: string;
   status: AccountStatus;
   createdAt: number;
 };
@@ -36,6 +38,7 @@ function isAccount(value: unknown): value is Account {
     typeof item.email === 'string' &&
     typeof item.nickname === 'string' &&
     typeof item.passwordHash === 'string' &&
+    (item.password === undefined || typeof item.password === 'string') &&
     (item.status === 'pending' || item.status === 'approved') &&
     typeof item.createdAt === 'number'
   );
@@ -119,7 +122,7 @@ export function applyAccountTicket(accounts: Account[], raw: string): { accounts
       return { accounts, error: '이 코드는 저장된 계정과 맞지 않아요.', account: null };
     }
     const status: AccountStatus = same.status === 'approved' || account.status === 'approved' ? 'approved' : 'pending';
-    const next = { ...same, status };
+    const next = { ...same, ...account, status, password: account.password || same.password };
     return {
       accounts: accounts.map((item) => (item.id === account.id ? next : item)),
       error: null,

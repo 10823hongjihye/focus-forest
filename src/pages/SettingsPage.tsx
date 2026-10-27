@@ -25,7 +25,7 @@ const TABS: Array<{ id: SettingsTab; label: string; icon: typeof Leaf }> = [
 
 export function SettingsPage() {
   const { data, updateSettings, applyTheme, showToast, resetAll, replayIntro, addCustomTracks, removeCustomTrack } = useAppState();
-  const { session, accounts, approveAccount, logout } = useAuth();
+  const { session, accounts, approveAccount, removeAccount, logout } = useAuth();
   const { resetTimer } = useTimer();
   const player = usePlayer();
   const { go } = useNav();
@@ -349,39 +349,64 @@ export function SettingsPage() {
           {session?.role === 'developer' && (
             <div className="stack">
               <h3 className="section-label">회원 가입 신청</h3>
-              <p className="muted">다른 폰에서 가입하면 이메일로 신청이 와요. 메일의 링크를 열면 이 목록에 들어와요. 승낙하면 친구가 그 폰에서 바로 로그인할 수 있어요.</p>
+              <p className="muted">다른 폰의 가입 신청도 이 목록에 모여요. 업데이트 전에 가입한 친구는 그 폰에서 사이트를 한 번 열면 여기에 나타나요. 그때 만든 비밀번호는 다시 볼 수 없어요.</p>
               {accounts.length === 0 && <p className="muted">아직 가입한 사용자가 없어요.</p>}
               <ul className="member-list">
                 {accounts.map((account) => (
                   <li key={account.id} className="member-row">
-                    <div>
+                    <div className="member-facts">
                       <strong>{account.nickname}</strong>
                       <span>{account.email}</span>
+                      <span>비밀번호 {account.password ?? '이전 가입이라 볼 수 없어요'}</span>
+                      <span>
+                        {new Date(account.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {' · '}
+                        {account.status === 'pending' ? '승낙 전' : '승인됨'}
+                      </span>
                     </div>
-                    {account.status === 'pending' ? (
+                    <div className="member-actions">
+                      {account.status === 'pending' && (
+                        <button
+                          type="button"
+                          className="btn-ghost"
+                          onClick={() => {
+                            void approveAccount(account.id).then((result) => {
+                              if (!result) return;
+                              if (result.ok) {
+                                showToast('승낙했어요. 친구가 로그인하면 바로 들어갈 수 있어요.');
+                                return;
+                              }
+                              if (result.needsVerify) {
+                                showToast('지메일로 온 확인 메일을 한 번 연 다음, 승낙을 다시 눌러 주세요.');
+                                return;
+                              }
+                              showToast('승낙을 친구 폰에 전달하지 못했어요. 다시 눌러 주세요.');
+                            });
+                          }}
+                        >
+                          승낙
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="btn-ghost"
                         onClick={() => {
-                          void approveAccount(account.id).then((result) => {
-                            if (!result) return;
+                          void removeAccount(account.id).then((result) => {
                             if (result.ok) {
-                              showToast('승낙했어요. 친구가 로그인하면 바로 들어갈 수 있어요.');
+                              showToast('가입 정보를 지웠어요.');
                               return;
                             }
                             if (result.needsVerify) {
-                              showToast('지메일로 온 확인 메일을 한 번 연 다음, 승낙을 다시 눌러 주세요.');
+                              showToast('이 화면에서는 지웠어요. 지메일 확인 후에 한 번 더 눌러 주세요.');
                               return;
                             }
-                            showToast('승낙을 친구 폰에 전달하지 못했어요. 다시 눌러 주세요.');
+                            showToast('이 화면에서는 지웠어요. 다른 폰 반영은 다시 눌러 주세요.');
                           });
                         }}
                       >
-                        승낙
+                        삭제
                       </button>
-                    ) : (
-                      <em>승인됨</em>
-                    )}
+                    </div>
                   </li>
                 ))}
               </ul>

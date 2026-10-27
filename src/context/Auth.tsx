@@ -13,7 +13,7 @@ import {
   type Account,
   type Session,
 } from '../lib/accounts';
-import { publishApprovedId, publishApprovedIds, loadApprovedIds } from '../lib/approvalSync';
+import { publishApprovedId, publishApprovedIds, loadApprovedIds, loadDirectory, mergeDirectory, publishDirectory, removeDirectoryAccount } from '../lib/approvalSync';
 import { deliverSignup } from '../lib/signupMail';
 
 type SignupInput = {
@@ -45,6 +45,7 @@ type AuthValue = {
   signup: (input: SignupInput) => Promise<SignupResult>;
   importTicket: (raw: string) => string | null;
   approveAccount: (id: string) => Promise<ApprovalResult | null>;
+  removeAccount: (id: string) => Promise<ApprovalResult>;
   logout: () => void;
 };
 
@@ -89,13 +90,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (session?.role === 'developer') return;
-    for (const account of accounts) {
-      if (account.status === 'pending') void deliverSignup(account);
-    }
-  }, [accounts, session]);
+    let stop = false;
+    void (async () => {
+      const remote = await loadDirectory();
+      if (stop) return;
+      const kept = remote ? accounts.filter((account) => !remote.removed.includes(account.id)) : accounts;
+      if (kept.length !== accounts.length) {
+        writeAccounts(kept);
+        return;
+      }
+      for (const account of kept) {
+        if (account.status === 'pending') void deliverSignup(account);
+      }
+      if (kept.length > 0) void publishDirectory(kept);
+    })();
+    return () => {
+      stop = true;
+    };
+  }, [accounts, session, writeAccounts]);
+
+  useEffect(() => {
+    if (session?.role !== 'developer') return;
+    let stop = false;
+    const sync = async () => {
+      if (document.hidden) return;
+      const remote = await loadDirectory();
+      if (stop || !remote) return;
+      const merged = mergeDirectory(loadAccounts(), remote);
+      if (JSON.stringify(loadAccounts()) !== JSON.stringify(merged)) writeAccounts(merged);
+    };
+    void sync();
+    const timer = window.setInterval(() => void sync(), 12000);
+    window.addEventListener('visibilitychange', sync);
+    return () => {
+      stop = true;
+      window.clearInterval(timer);
+      window.removeEventListener('visibilitychange', sync);
+    };
+  }, [session, writeAccounts]);
 
   useEffect(() => {
     if (session?.role !== 'developer' || publishedApprovals.current) return;
+    void publishDirectory(accounts);
     const ids = accounts.filter((account) => account.status === 'approved').map((account) => account.id);
     if (ids.length === 0) return;
     void publishApprovedIds(ids).then((result) => {
@@ -112,11 +148,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (nickname: string, password: string) => {
       const name = normalizeNickname(nickname);
       if (!name || !password) return '닉네임과 비밀번호를 입력해 주세요.';
+      const directory = await loadDirectory();
+      const removed = directory?.removed ?? [];
+      const known = accounts.find((item) => item.nickname.toLowerCase() === name.toLowerCase());
+      if (known && removed.includes(known.id)) {
+        writeAccounts(accounts.filter((item) => !removed.includes(item.id)));
+        return '삭제된 계정이에요. 다시 가입해 주세요.';
+      }
+      if (removed.length) {
+        const kept = accounts.filter((item) => !removed.includes(item.id));
+        if (kept.length !== accounts.length) writeAccounts(kept);
+      }
       const approvedIds = await loadApprovedIds();
-      let list = accounts;
+      let list = accounts.filter((item) => !removed.includes(item.id));
       if (approvedIds) {
         let changed = false;
-        list = accounts.map((item) => {
+        list = list.map((item) => {
           if (item.status === 'approved' || !approvedIds.includes(item.id)) return item;
           changed = true;
           return { ...item, status: 'approved' as const };
@@ -174,6 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: mail,
         nickname: name,
         passwordHash: await hashPassword(name, password),
+        password,
         status: 'pending',
         createdAt: Date.now(),
       };
@@ -205,8 +253,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const current = accounts.find((account) => account.id === id);
       if (!current) return null;
       const next: Account = { ...current, status: 'approved' };
-      writeAccounts(accounts.map((account) => (account.id === id ? next : account)));
-      return publishApprovedId(id);
+      const nextList = accounts.map((account) => (account.id === id ? next : account));
+      writeAccounts(nextList);
+      const published = await publishApprovedId(id);
+      void publishDirectory(nextList);
+      return published;
+    },
+    [accounts, writeAccounts],
+  );
+
+  const removeAccount = useCallback(
+    async (id: string) => {
+      const removed = await removeDirectoryAccount(id);
+      writeAccounts(accounts.filter((account) => account.id !== id));
+      return removed;
     },
     [accounts, writeAccounts],
   );
@@ -217,8 +277,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthValue>(
-    () => ({ session, accounts, linkNotice, loginUser, loginDeveloper, signup, importTicket, approveAccount, logout }),
-    [session, accounts, linkNotice, loginUser, loginDeveloper, signup, importTicket, approveAccount, logout],
+    () => ({ session, accounts, linkNotice, loginUser, loginDeveloper, signup, importTicket, approveAccount, removeAccount, logout }),
+    [session, accounts, linkNotice, loginUser, loginDeveloper, signup, importTicket, approveAccount, removeAccount, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
