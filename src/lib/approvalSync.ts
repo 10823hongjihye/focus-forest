@@ -6,6 +6,8 @@ const DIRECTORY_URL = 'https://kvdb.io/EJrkyDzAwMWk4jTBYzmN4P/directory';
 export type AccountDirectory = {
   accounts: Account[];
   removed: string[];
+  /** 관리자가 확인한 승인 요청 계정 id */
+  seen: string[];
 };
 
 export type ApprovalWrite = {
@@ -87,12 +89,13 @@ function isDirectoryAccount(value: unknown): value is Account {
 export async function loadDirectory(): Promise<AccountDirectory | null> {
   try {
     const response = await fetch(DIRECTORY_URL, { cache: 'no-store' });
-    if (response.status === 404) return { accounts: [], removed: [] };
+    if (response.status === 404) return { accounts: [], removed: [], seen: [] };
     if (!response.ok) return null;
-    const parsed = JSON.parse(await response.text()) as { accounts?: unknown; removed?: unknown };
+    const parsed = JSON.parse(await response.text()) as { accounts?: unknown; removed?: unknown; seen?: unknown };
     const accounts = Array.isArray(parsed.accounts) ? parsed.accounts.filter(isDirectoryAccount) : [];
     const removed = Array.isArray(parsed.removed) ? parsed.removed.filter((id): id is string => typeof id === 'string') : [];
-    return { accounts, removed };
+    const seen = Array.isArray(parsed.seen) ? parsed.seen.filter((id): id is string => typeof id === 'string' && id.startsWith('acct-')) : [];
+    return { accounts, removed, seen };
   } catch {
     return null;
   }
@@ -127,6 +130,7 @@ export async function publishIfAbsent(account: Account): Promise<ApprovalWrite> 
   const saved = await saveDirectory({
     accounts: [...cleanDirectory(remote.accounts), withoutPassword(account)],
     removed: remote.removed,
+    seen: remote.seen,
   });
   if (!saved.ok || account.status !== 'approved') return saved;
   return publishApprovedId(account.id);
@@ -144,6 +148,7 @@ export async function writeAccountStatus(account: Account, status: AccountStatus
   const saved = await saveDirectory({
     accounts,
     removed: remote.removed.filter((id) => id !== account.id),
+    seen: remote.seen,
   });
   if (!saved.ok) return saved;
   if (status === 'approved') return publishApprovedId(account.id);
@@ -157,7 +162,17 @@ export async function removeDirectoryAccount(id: string): Promise<ApprovalWrite>
   const saved = await saveDirectory({
     accounts: cleanDirectory(remote.accounts.filter((account) => account.id !== id)),
     removed,
+    seen: remote.seen.filter((item) => item !== id),
   });
   if (!saved.ok) return saved;
   return revokeApprovedId(id);
+}
+
+/** 관리자가 연 승인 요청만 읽음으로 공유 목록에 남깁니다. */
+export async function markNoticesSeen(ids: string[]): Promise<ApprovalWrite> {
+  const remote = await loadDirectory();
+  if (!remote) return { ok: false, needsVerify: false };
+  const seen = [...new Set([...remote.seen, ...ids.filter((id) => id.startsWith('acct-'))])];
+  if (seen.length === remote.seen.length) return { ok: true, needsVerify: false };
+  return saveDirectory({ accounts: cleanDirectory(remote.accounts), removed: remote.removed, seen });
 }

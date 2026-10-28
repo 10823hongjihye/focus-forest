@@ -1,8 +1,54 @@
 import { useState } from 'react';
-import { Leaf } from 'lucide-react';
+import { Eye, EyeOff, Leaf } from 'lucide-react';
 import { useAuth } from '../context/Auth';
 
 type Mode = 'login' | 'signup' | 'developer';
+
+function PasswordField({
+  label,
+  value,
+  onChange,
+  autoComplete,
+  placeholder,
+  error,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  autoComplete: string;
+  placeholder: string;
+  error?: string;
+}) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <span className="password-field">
+        <input
+          type={visible ? 'text' : 'password'}
+          value={value}
+          autoComplete={autoComplete}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+        />
+        <button
+          type="button"
+          className="password-toggle"
+          aria-label={visible ? '비밀번호 숨기기' : '비밀번호 표시'}
+          aria-pressed={visible}
+          onClick={() => setVisible((shown) => !shown)}
+        >
+          {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </span>
+      {error && (
+        <em className="field-error" role="alert">
+          {error}
+        </em>
+      )}
+    </label>
+  );
+}
 
 export function AuthPage() {
   const { loginUser, loginDeveloper, signup, linkNotice } = useAuth();
@@ -14,6 +60,7 @@ export function AuthPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const confirmMismatch = confirm.length > 0 && confirm !== password;
 
   const reset = (next: Mode) => {
     setMode(next);
@@ -38,6 +85,7 @@ export function AuthPage() {
   };
 
   const submitSignup = async () => {
+    if (confirm !== password) return;
     setBusy(true);
     setError('');
     const result = await signup({ email, nickname, password, confirm });
@@ -90,16 +138,13 @@ export function AuthPage() {
             <span>닉네임 또는 이메일</span>
             <input value={nickname} autoComplete="username" onChange={(event) => setNickname(event.target.value)} placeholder="닉네임 또는 이메일" />
           </label>
-          <label className="field">
-            <span>비밀번호</span>
-            <input
-              type="password"
-              value={password}
-              autoComplete="current-password"
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="비밀번호"
-            />
-          </label>
+          <PasswordField
+            label="비밀번호"
+            value={password}
+            autoComplete="current-password"
+            placeholder="비밀번호"
+            onChange={setPassword}
+          />
           <button type="submit" className="btn-primary" disabled={busy}>
             로그인
           </button>
@@ -122,27 +167,16 @@ export function AuthPage() {
             <span>닉네임</span>
             <input value={nickname} autoComplete="nickname" onChange={(event) => setNickname(event.target.value)} placeholder="닉네임" />
           </label>
-          <label className="field">
-            <span>비밀번호</span>
-            <input
-              type="password"
-              value={password}
-              autoComplete="new-password"
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="비밀번호"
-            />
-          </label>
-          <label className="field">
-            <span>비밀번호 확인</span>
-            <input
-              type="password"
-              value={confirm}
-              autoComplete="new-password"
-              onChange={(event) => setConfirm(event.target.value)}
-              placeholder="비밀번호 확인"
-            />
-          </label>
-          <button type="submit" className="btn-primary" disabled={busy}>
+          <PasswordField label="비밀번호" value={password} autoComplete="new-password" placeholder="비밀번호" onChange={setPassword} />
+          <PasswordField
+            label="비밀번호 확인"
+            value={confirm}
+            autoComplete="new-password"
+            placeholder="비밀번호 확인"
+            onChange={setConfirm}
+            error={confirmMismatch ? '비밀번호가 틀립니다' : undefined}
+          />
+          <button type="submit" className="btn-primary" disabled={busy || password !== confirm}>
             가입 신청
           </button>
           <button type="button" className="btn-ghost wide" onClick={() => reset('login')}>
@@ -159,16 +193,13 @@ export function AuthPage() {
             submitDeveloper();
           }}
         >
-          <label className="field">
-            <span>비밀번호</span>
-            <input
-              type="password"
-              value={password}
-              autoComplete="current-password"
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="개발자 비밀번호"
-            />
-          </label>
+          <PasswordField
+            label="비밀번호"
+            value={password}
+            autoComplete="current-password"
+            placeholder="개발자 비밀번호"
+            onChange={setPassword}
+          />
           <button type="submit" className="btn-primary">
             관리자 화면으로 들어가기
           </button>

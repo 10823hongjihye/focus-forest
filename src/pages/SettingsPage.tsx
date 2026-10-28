@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Bell, Leaf, Music, Plus, Timer, UserRound } from 'lucide-react';
 import type { SettingsTab } from '../types';
 import { Bear } from '../components/Bear';
@@ -25,17 +25,26 @@ const TABS: Array<{ id: SettingsTab; label: string; icon: typeof Leaf }> = [
 
 export function SettingsPage() {
   const { data, updateSettings, applyTheme, showToast, resetAll, replayIntro, addCustomTracks, removeCustomTrack } = useAppState();
-  const { session, accounts, approveAccount, rejectAccount, removeAccount, logout, syncNotice } = useAuth();
+  const { session, accounts, approveAccount, rejectAccount, removeAccount, logout, syncNotice, approvalFocus, clearApprovalFocus } = useAuth();
   const { resetTimer } = useTimer();
   const player = usePlayer();
   const { go } = useNav();
-  const [tab, setTab] = useState<SettingsTab>('theme');
-  const [memberFilter, setMemberFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [tab, setTab] = useState<SettingsTab>(approvalFocus && session?.role === 'developer' ? 'account' : 'theme');
+  const [memberFilter, setMemberFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>(
+    approvalFocus && session?.role === 'developer' ? 'pending' : 'all',
+  );
   const [confirmReset, setConfirmReset] = useState(false);
   const [adderOpen, setAdderOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const { settings } = data;
+
+  useEffect(() => {
+    if (!approvalFocus || session?.role !== 'developer') return;
+    setTab('account');
+    setMemberFilter('pending');
+    clearApprovalFocus();
+  }, [approvalFocus, clearApprovalFocus, session]);
 
   const enableNotifications = async (on: boolean) => {
     updateSettings({ notifications: on });

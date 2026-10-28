@@ -15,7 +15,7 @@ import {
   type AccountStatus,
   type Session,
 } from '../lib/accounts';
-import { loadDirectory, publishIfAbsent, removeDirectoryAccount, writeAccountStatus } from '../lib/approvalSync';
+import { loadDirectory, markNoticesSeen, publishIfAbsent, removeDirectoryAccount, writeAccountStatus } from '../lib/approvalSync';
 
 type SignupInput = {
   email: string;
@@ -39,6 +39,11 @@ type AuthValue = {
   accounts: Account[];
   linkNotice: string;
   syncNotice: string;
+  seenNoticeIds: string[];
+  approvalFocus: boolean;
+  markNoticeRead: (id: string) => void;
+  requestApprovalFocus: () => void;
+  clearApprovalFocus: () => void;
   loginUser: (nickname: string, password: string) => Promise<string | null>;
   loginDeveloper: (password: string) => string | null;
   signup: (input: SignupInput) => Promise<SignupResult>;
@@ -50,6 +55,21 @@ type AuthValue = {
 };
 
 const AuthContext = createContext<AuthValue | null>(null);
+const NOTICE_SEEN_KEY = 'focus-forest-notice-seen';
+
+function loadSeenIds(): string[] {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(NOTICE_SEEN_KEY) ?? '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((id): id is string => typeof id === 'string' && id.startsWith('acct-'));
+  } catch {
+    return [];
+  }
+}
+
+function saveSeenIds(ids: string[]): void {
+  localStorage.setItem(NOTICE_SEEN_KEY, JSON.stringify(ids));
+}
 
 function newId(): string {
   return `acct-${crypto.randomUUID()}`;
@@ -60,6 +80,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [accounts, setAccounts] = useState<Account[]>(() => loadAccounts());
   const [linkNotice, setLinkNotice] = useState('');
   const [syncNotice, setSyncNotice] = useState('');
+  const [seenNoticeIds, setSeenNoticeIds] = useState<string[]>(() => loadSeenIds());
+  const [approvalFocus, setApprovalFocus] = useState(false);
   const joined = useRef(false);
 
   const writeAccounts = useCallback((next: Account[]) => {
@@ -159,6 +181,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const extras = local.filter((account) => !seen.has(account.id) && !again.removed.includes(account.id));
       const visible = [...again.accounts.map(withoutPassword), ...extras].sort((a, b) => a.createdAt - b.createdAt);
       if (JSON.stringify(local) !== JSON.stringify(visible)) writeAccounts(visible);
+      setSeenNoticeIds((current) => {
+        const merged = [...new Set([...current, ...again.seen])];
+        if (merged.length === current.length && merged.every((id) => current.includes(id))) return current;
+        saveSeenIds(merged);
+        return merged;
+      });
       setSyncNotice(notice);
     };
     void sync();
@@ -297,9 +325,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
   }, []);
 
+  const markNoticeRead = useCallback(
+    (id: string) => {
+      if (session?.role !== 'developer' || !id.startsWith('acct-')) return;
+      setSeenNoticeIds((current) => {
+        if (current.includes(id)) return current;
+        const next = [...current, id];
+        saveSeenIds(next);
+        return next;
+      });
+      void markNoticesSeen([id]);
+    },
+    [session],
+  );
+
+  const requestApprovalFocus = useCallback(() => setApprovalFocus(true), []);
+  const clearApprovalFocus = useCallback(() => setApprovalFocus(false), []);
+
   const value = useMemo<AuthValue>(
-    () => ({ session, accounts, linkNotice, syncNotice, loginUser, loginDeveloper, signup, importTicket, approveAccount, rejectAccount, removeAccount, logout }),
-    [session, accounts, linkNotice, syncNotice, loginUser, loginDeveloper, signup, importTicket, approveAccount, rejectAccount, removeAccount, logout],
+    () => ({
+      session,
+      accounts,
+      linkNotice,
+      syncNotice,
+      seenNoticeIds,
+      approvalFocus,
+      loginUser,
+      loginDeveloper,
+      signup,
+      importTicket,
+      approveAccount,
+      rejectAccount,
+      removeAccount,
+      logout,
+      markNoticeRead,
+      requestApprovalFocus,
+      clearApprovalFocus,
+    }),
+    [
+      session,
+      accounts,
+      linkNotice,
+      syncNotice,
+      seenNoticeIds,
+      approvalFocus,
+      loginUser,
+      loginDeveloper,
+      signup,
+      importTicket,
+      approveAccount,
+      rejectAccount,
+      removeAccount,
+      logout,
+      markNoticeRead,
+      requestApprovalFocus,
+      clearApprovalFocus,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -12,8 +12,9 @@ import { useStudiedSeconds } from '../hooks/useStudiedSeconds';
 
 export function HomePage() {
   const { data, toggleTodo } = useAppState();
-  const { session, accounts } = useAuth();
-  const pendingSignup = session?.role === 'developer' && accounts.some((account) => account.status === 'pending');
+  const { session, accounts, seenNoticeIds, markNoticeRead, requestApprovalFocus } = useAuth();
+  const approvalRequests = session?.role === 'developer' ? accounts.filter((account) => account.status === 'pending') : [];
+  const unreadApprovals = approvalRequests.filter((account) => !seenNoticeIds.includes(account.id));
   const { snapshot } = useTimer();
   const { go } = useNav();
   const [bellOpen, setBellOpen] = useState(false);
@@ -52,7 +53,7 @@ export function HomePage() {
         <button
           type="button"
           className="icon-btn bell"
-          aria-label={pendingSignup ? '알림, 가입 신청이 있어요' : '알림'}
+          aria-label={unreadApprovals.length > 0 ? `알림, 읽지 않은 승인 요청 ${unreadApprovals.length}개` : '알림'}
           aria-expanded={bellOpen}
           onClick={(event) => {
             event.stopPropagation();
@@ -60,11 +61,31 @@ export function HomePage() {
           }}
         >
           <Bell size={18} />
-          {pendingSignup && <span className="bell-dot" aria-hidden />}
+          {unreadApprovals.length > 0 && <span className="bell-count">{unreadApprovals.length > 9 ? '9+' : unreadApprovals.length}</span>}
         </button>
         {bellOpen && (
           <div className="popover" onClick={(event) => event.stopPropagation()}>
             <strong>오늘의 알림</strong>
+            {approvalRequests.length === 0 && <p className="muted">새 승인 요청이 없어요.</p>}
+            {approvalRequests.map((account) => {
+              const read = seenNoticeIds.includes(account.id);
+              return (
+                <button
+                  key={account.id}
+                  type="button"
+                  className={cx('notice-item', read && 'is-read')}
+                  onClick={() => {
+                    markNoticeRead(account.id);
+                    requestApprovalFocus();
+                    setBellOpen(false);
+                    go('settings');
+                  }}
+                >
+                  <span>새 사용자가 승인 요청을 하였습니다.</span>
+                  <small>{account.nickname}</small>
+                </button>
+              );
+            })}
             <p>{ratio >= 1 ? '오늘의 목표를 채웠어요.' : `목표까지 ${formatKoreanDuration(remain)} 남았어요.`}</p>
             <p className="muted">{data.settings.notifications ? '타이머가 끝나면 알려드릴게요.' : '알림은 아직 꺼져 있어요.'}</p>
             <button type="button" className="text-btn" onClick={() => go('settings')}>
