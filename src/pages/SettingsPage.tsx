@@ -25,11 +25,12 @@ const TABS: Array<{ id: SettingsTab; label: string; icon: typeof Leaf }> = [
 
 export function SettingsPage() {
   const { data, updateSettings, applyTheme, showToast, resetAll, replayIntro, addCustomTracks, removeCustomTrack } = useAppState();
-  const { session, accounts, approveAccount, removeAccount, logout } = useAuth();
+  const { session, accounts, approveAccount, rejectAccount, removeAccount, logout, syncNotice } = useAuth();
   const { resetTimer } = useTimer();
   const player = usePlayer();
   const { go } = useNav();
   const [tab, setTab] = useState<SettingsTab>('theme');
+  const [memberFilter, setMemberFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [confirmReset, setConfirmReset] = useState(false);
   const [adderOpen, setAdderOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -349,23 +350,36 @@ export function SettingsPage() {
           {session?.role === 'developer' && (
             <div className="stack">
               <h3 className="section-label">회원 가입 신청</h3>
-              <p className="muted">다른 폰의 가입 신청도 이 목록에 모여요. 업데이트 전에 가입한 친구는 그 폰에서 사이트를 한 번 열면 여기에 나타나요. 그때 만든 비밀번호는 다시 볼 수 없어요.</p>
+              <p className="muted">가입 신청은 이 목록에 모여요. 승인된 계정만 로그인할 수 있고, 비밀번호는 표시하지 않아요.</p>
+              {syncNotice && <p className="auth-notice">{syncNotice}</p>}
+              <Segmented
+                label="회원 상태"
+                value={memberFilter}
+                onChange={setMemberFilter}
+                options={[
+                  { id: 'all', label: '전체' },
+                  { id: 'pending', label: '대기' },
+                  { id: 'approved', label: '승인' },
+                  { id: 'rejected', label: '거절' },
+                ]}
+              />
               {accounts.length === 0 && <p className="muted">아직 가입한 사용자가 없어요.</p>}
               <ul className="member-list">
-                {accounts.map((account) => (
+                {accounts
+                  .filter((account) => memberFilter === 'all' || account.status === memberFilter)
+                  .map((account) => (
                   <li key={account.id} className="member-row">
                     <div className="member-facts">
                       <strong>{account.nickname}</strong>
                       <span>{account.email}</span>
-                      <span>비밀번호 {account.password ?? '이전 가입이라 볼 수 없어요'}</span>
                       <span>
                         {new Date(account.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         {' · '}
-                        {account.status === 'pending' ? '승낙 전' : '승인됨'}
+                        {account.status === 'approved' ? '승인됨' : account.status === 'rejected' ? '거절됨' : '승인 대기'}
                       </span>
                     </div>
                     <div className="member-actions">
-                      {account.status === 'pending' && (
+                      {account.status !== 'approved' && (
                         <button
                           type="button"
                           className="btn-ghost"
@@ -373,18 +387,40 @@ export function SettingsPage() {
                             void approveAccount(account.id).then((result) => {
                               if (!result) return;
                               if (result.ok) {
-                                showToast('승낙했어요. 친구가 로그인하면 바로 들어갈 수 있어요.');
+                                showToast('승인했어요. 이제 로그인할 수 있어요.');
                                 return;
                               }
                               if (result.needsVerify) {
-                                showToast('지메일로 온 확인 메일을 한 번 연 다음, 승낙을 다시 눌러 주세요.');
+                                showToast('승인 목록이 아직 활성화되지 않아 저장하지 못했어요.');
                                 return;
                               }
-                              showToast('승낙을 친구 폰에 전달하지 못했어요. 다시 눌러 주세요.');
+                              showToast('승인을 저장하지 못했어요. 다시 눌러 주세요.');
                             });
                           }}
                         >
-                          승낙
+                          승인
+                        </button>
+                      )}
+                      {account.status !== 'rejected' && (
+                        <button
+                          type="button"
+                          className="btn-ghost"
+                          onClick={() => {
+                            void rejectAccount(account.id).then((result) => {
+                              if (!result) return;
+                              if (result.ok) {
+                                showToast('가입을 거절했어요. 그 계정은 로그인할 수 없어요.');
+                                return;
+                              }
+                              if (result.needsVerify) {
+                                showToast('승인 목록이 아직 활성화되지 않아 거절을 저장하지 못했어요.');
+                                return;
+                              }
+                              showToast('거절을 저장하지 못했어요. 다시 눌러 주세요.');
+                            });
+                          }}
+                        >
+                          거절
                         </button>
                       )}
                       <button
@@ -397,10 +433,10 @@ export function SettingsPage() {
                               return;
                             }
                             if (result.needsVerify) {
-                              showToast('이 화면에서는 지웠어요. 지메일 확인 후에 한 번 더 눌러 주세요.');
+                              showToast('승인 목록이 아직 활성화되지 않아 지우지 못했어요.');
                               return;
                             }
-                            showToast('이 화면에서는 지웠어요. 다른 폰 반영은 다시 눌러 주세요.');
+                            showToast('가입 정보를 지우지 못했어요. 다시 눌러 주세요.');
                           });
                         }}
                       >
@@ -410,6 +446,9 @@ export function SettingsPage() {
                   </li>
                 ))}
               </ul>
+              {accounts.length > 0 && accounts.every((account) => memberFilter !== 'all' && account.status !== memberFilter) && (
+                <p className="muted">이 상태의 가입자가 없어요.</p>
+              )}
             </div>
           )}
           <label className="field">

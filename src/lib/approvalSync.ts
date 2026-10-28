@@ -1,4 +1,4 @@
-import { type Account, type AccountStatus } from './accounts';
+import { withoutPassword, type Account, type AccountStatus } from './accounts';
 
 const APPROVAL_URL = 'https://kvdb.io/EJrkyDzAwMWk4jTBYzmN4P/approved';
 const DIRECTORY_URL = 'https://kvdb.io/EJrkyDzAwMWk4jTBYzmN4P/directory';
@@ -79,7 +79,7 @@ function isDirectoryAccount(value: unknown): value is Account {
     typeof item.nickname === 'string' &&
     typeof item.passwordHash === 'string' &&
     (item.password === undefined || typeof item.password === 'string') &&
-    (item.status === 'pending' || item.status === 'approved') &&
+    (item.status === 'pending' || item.status === 'approved' || item.status === 'rejected') &&
     typeof item.createdAt === 'number'
   );
 }
@@ -113,50 +113,49 @@ async function saveDirectory(directory: AccountDirectory): Promise<ApprovalWrite
   }
 }
 
-export function mergeDirectory(local: Account[], remote: AccountDirectory): Account[] {
-  const removed = new Set(remote.removed);
-  const byId = new Map<string, Account>();
-  for (const account of remote.accounts) {
-    if (!removed.has(account.id)) byId.set(account.id, account);
-  }
-  for (const account of local) {
-    if (removed.has(account.id)) continue;
-    const prev = byId.get(account.id);
-    if (!prev) {
-      byId.set(account.id, account);
-      continue;
-    }
-    const status: AccountStatus = prev.status === 'approved' || account.status === 'approved' ? 'approved' : 'pending';
-    byId.set(account.id, { ...prev, ...account, status, password: account.password || prev.password });
-  }
-  return [...byId.values()].sort((a, b) => a.createdAt - b.createdAt);
+function cleanDirectory(accounts: Account[]): Account[] {
+  return accounts.map((account) => withoutPassword(account));
 }
 
-const pendingRemovals = new Set<string>();
-
-export async function publishDirectory(local: Account[]): Promise<ApprovalWrite> {
+/** 목록에 없는 계정만 추가합니다. 이미 있는 계정의 승인 상태와 비밀번호 해시는 바꾸지 않습니다. */
+export async function publishIfAbsent(account: Account): Promise<ApprovalWrite> {
   const remote = await loadDirectory();
   if (!remote) return { ok: false, needsVerify: false };
-  const removed = [...new Set([...remote.removed, ...pendingRemovals])];
-  const accounts = mergeDirectory(local, { ...remote, removed });
-  const same =
-    accounts.length === remote.accounts.length &&
-    removed.length === remote.removed.length &&
-    accounts.every((account) => {
-      const prev = remote.accounts.find((item) => item.id === account.id);
-      return prev && prev.status === account.status && prev.password === account.password && prev.email === account.email;
-    });
-  if (same) return { ok: true, needsVerify: false };
-  return saveDirectory({ accounts, removed });
+  if (remote.removed.includes(account.id) || remote.accounts.some((item) => item.id === account.id)) {
+    return { ok: true, needsVerify: false };
+  }
+  const saved = await saveDirectory({
+    accounts: [...cleanDirectory(remote.accounts), withoutPassword(account)],
+    removed: remote.removed,
+  });
+  if (!saved.ok || account.status !== 'approved') return saved;
+  return publishApprovedId(account.id);
+}
+
+/** 관리자가 누른 승인 또는 거절만 공유 목록에 기록합니다. */
+export async function writeAccountStatus(account: Account, status: AccountStatus): Promise<ApprovalWrite> {
+  const remote = await loadDirectory();
+  if (!remote) return { ok: false, needsVerify: false };
+  const existing = remote.accounts.find((item) => item.id === account.id);
+  const next = withoutPassword({ ...(existing ?? account), ...withoutPassword(account), status, passwordHash: existing?.passwordHash ?? account.passwordHash });
+  const accounts = existing
+    ? remote.accounts.map((item) => (item.id === account.id ? next : withoutPassword(item)))
+    : [...cleanDirectory(remote.accounts), next];
+  const saved = await saveDirectory({
+    accounts,
+    removed: remote.removed.filter((id) => id !== account.id),
+  });
+  if (!saved.ok) return saved;
+  if (status === 'approved') return publishApprovedId(account.id);
+  return revokeApprovedId(account.id);
 }
 
 export async function removeDirectoryAccount(id: string): Promise<ApprovalWrite> {
-  pendingRemovals.add(id);
   const remote = await loadDirectory();
   if (!remote) return { ok: false, needsVerify: false };
-  const removed = [...new Set([...remote.removed, ...pendingRemovals])];
+  const removed = [...new Set([...remote.removed, id])];
   const saved = await saveDirectory({
-    accounts: remote.accounts.filter((account) => !removed.includes(account.id)),
+    accounts: cleanDirectory(remote.accounts.filter((account) => account.id !== id)),
     removed,
   });
   if (!saved.ok) return saved;

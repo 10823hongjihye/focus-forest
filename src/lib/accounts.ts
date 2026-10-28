@@ -4,14 +4,14 @@ const SESSION_KEY = 'focus-forest-session';
 /** 개발자 전용 로그인 비밀번호. 이 기기에서만 쓰입니다. */
 export const DEVELOPER_PASSWORD = '3435';
 
-export type AccountStatus = 'pending' | 'approved';
+export type AccountStatus = 'pending' | 'approved' | 'rejected';
 
 export type Account = {
   id: string;
   email: string;
   nickname: string;
   passwordHash: string;
-  /** 새로 가입한 계정만 관리자 화면에서 볼 수 있습니다. 예전 가입은 해시만 남아 있습니다. */
+  /** 예전 가입 코드에만 남아 있을 수 있습니다. 저장할 때 지웁니다. */
   password?: string;
   status: AccountStatus;
   createdAt: number;
@@ -39,7 +39,7 @@ function isAccount(value: unknown): value is Account {
     typeof item.nickname === 'string' &&
     typeof item.passwordHash === 'string' &&
     (item.password === undefined || typeof item.password === 'string') &&
-    (item.status === 'pending' || item.status === 'approved') &&
+    (item.status === 'pending' || item.status === 'approved' || item.status === 'rejected') &&
     typeof item.createdAt === 'number'
   );
 }
@@ -50,8 +50,22 @@ export function loadAccounts(): Account[] {
   return parsed.filter(isAccount);
 }
 
+export function withoutPassword(account: Account): Account {
+  if (account.password === undefined) return account;
+  const next = { ...account };
+  delete next.password;
+  return next;
+}
+
 export function saveAccounts(accounts: Account[]): void {
-  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts.map(withoutPassword)));
+}
+
+export function samePerson(account: Account, typed: string): boolean {
+  const raw = typed.trim();
+  const name = normalizeNickname(raw).toLowerCase();
+  const mail = raw.toLowerCase();
+  return account.nickname.toLowerCase() === name || account.email === mail;
 }
 
 export function loadSession(): Session | null {
@@ -121,8 +135,13 @@ export function applyAccountTicket(accounts: Account[], raw: string): { accounts
     if (same.passwordHash !== account.passwordHash) {
       return { accounts, error: '이 코드는 저장된 계정과 맞지 않아요.', account: null };
     }
-    const status: AccountStatus = same.status === 'approved' || account.status === 'approved' ? 'approved' : 'pending';
-    const next = { ...same, ...account, status, password: account.password || same.password };
+    const status: AccountStatus =
+      same.status === 'rejected' || account.status === 'rejected'
+        ? 'rejected'
+        : same.status === 'approved' || account.status === 'approved'
+          ? 'approved'
+          : 'pending';
+    const next = withoutPassword({ ...same, ...account, status, passwordHash: same.passwordHash });
     return {
       accounts: accounts.map((item) => (item.id === account.id ? next : item)),
       error: null,
@@ -135,10 +154,11 @@ export function applyAccountTicket(accounts: Account[], raw: string): { accounts
   if (accounts.some((item) => item.email === account.email)) {
     return { accounts, error: '이미 가입된 이메일이에요.', account: null };
   }
+  const clean = withoutPassword(account);
   return {
-    accounts: [...accounts, account].sort((a, b) => a.createdAt - b.createdAt),
+    accounts: [...accounts, clean].sort((a, b) => a.createdAt - b.createdAt),
     error: null,
-    account,
+    account: clean,
   };
 }
 
