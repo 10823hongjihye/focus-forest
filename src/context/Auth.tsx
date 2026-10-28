@@ -128,13 +128,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         changed = true;
         return [{ ...withoutPassword(account), status: found.status }];
       });
-      if (
-        session?.role === 'user' &&
-        (remote.removed.includes(session.userId) ||
-          remote.accounts.some((account) => account.id === session.userId && account.status !== 'approved'))
-      ) {
-        saveSession(null);
-        setSession(null);
+      if (session?.role === 'user') {
+        const mine = next.find((account) => account.id === session.userId);
+        const remoteMine = remote.accounts.find((account) => account.id === session.userId);
+        if (
+          !mine ||
+          mine.status !== 'approved' ||
+          remote.removed.includes(session.userId) ||
+          (remoteMine && remoteMine.status !== 'approved')
+        ) {
+          saveSession(null);
+          setSession(null);
+        }
       }
       if (changed) {
         writeAccounts(next);
@@ -167,7 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const published = await publishIfAbsent(account);
         if (stop) return;
         if (published.needsVerify) {
-          notice = '다른 폰과 승인을 맞추려면 지메일로 온 kvdb 확인 메일을 한 번 열어 주세요. 가입 신청 메일은 더 이상 보내지 않아요.';
+          notice = '이 브라우저의 가입 신청은 여기서 승인할 수 있어요. 다른 폰에는 아직 전달되지 않아요.';
           break;
         }
         if (!published.ok) {
@@ -271,7 +276,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
       writeAccounts([...accounts.map(withoutPassword), account]);
       const published = await publishIfAbsent(account);
-      if (published.needsVerify) setSyncNotice('가입은 이 폰에 저장됐어요. 다른 폰의 관리자 목록에 연결하려면 kvdb 확인 메일을 한 번 열어 주세요.');
+      if (published.needsVerify) setSyncNotice('가입 신청은 이 브라우저에 저장됐어요. 다른 폰의 관리자 화면에는 아직 전달되지 않았어요.');
       return { error: null, synced: published.ok };
     },
     [accounts, writeAccounts],
@@ -292,12 +297,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (id: string, status: AccountStatus) => {
       const current = accounts.find((account) => account.id === id);
       if (!current) return null;
+      if (current.status === status) return { ok: true, needsVerify: false };
       const nextList = accounts.map((account) => (account.id === id ? withoutPassword({ ...account, status }) : withoutPassword(account)));
       writeAccounts(nextList);
       const published = await writeAccountStatus(current, status);
-      if (!published.ok) writeAccounts(accounts.map(withoutPassword));
-      if (published.needsVerify) {
-        setSyncNotice('승인 상태를 다른 폰에 저장하지 못했어요. 지메일로 온 kvdb 확인 메일을 한 번 열어 주세요.');
+      if (!published.ok) {
+        setSyncNotice('이 브라우저의 승인 상태는 바뀌었어요. 다른 폰에는 아직 전달되지 않았어요.');
       }
       return published;
     },
@@ -311,7 +316,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (id: string) => {
       const removed = await removeDirectoryAccount(id);
       if (!removed.ok) {
-        if (removed.needsVerify) setSyncNotice('가입 정보를 다른 폰에서 지우지 못했어요. 지메일로 온 kvdb 확인 메일을 한 번 열어 주세요.');
+        if (removed.needsVerify) setSyncNotice('이 브라우저에서는 지우지 못했어요. 다른 폰과 맞추는 목록이 아직 열리지 않았어요.');
         return removed;
       }
       writeAccounts(accounts.filter((account) => account.id !== id).map(withoutPassword));

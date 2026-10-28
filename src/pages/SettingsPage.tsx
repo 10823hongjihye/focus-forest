@@ -396,14 +396,14 @@ export function SettingsPage() {
                             void approveAccount(account.id).then((result) => {
                               if (!result) return;
                               if (result.ok) {
-                                showToast('승인했어요. 이제 로그인할 수 있어요.');
+                                showToast('승인했어요. 이제 이 브라우저에서 로그인할 수 있어요.');
                                 return;
                               }
                               if (result.needsVerify) {
-                                showToast('승인 목록이 아직 활성화되지 않아 저장하지 못했어요.');
+                                showToast('이 브라우저에서는 승인했어요. 다른 폰에는 아직 전달되지 않았어요.');
                                 return;
                               }
-                              showToast('승인을 저장하지 못했어요. 다시 눌러 주세요.');
+                              showToast('이 브라우저에서는 승인했어요. 다른 폰 전달은 잠시 후 다시 눌러 주세요.');
                             });
                           }}
                         >
@@ -422,10 +422,10 @@ export function SettingsPage() {
                                 return;
                               }
                               if (result.needsVerify) {
-                                showToast('승인 목록이 아직 활성화되지 않아 거절을 저장하지 못했어요.');
+                                showToast('이 브라우저에서는 거절했어요. 다른 폰에는 아직 전달되지 않았어요.');
                                 return;
                               }
-                              showToast('거절을 저장하지 못했어요. 다시 눌러 주세요.');
+                              showToast('이 브라우저에서는 거절했어요. 다른 폰 전달은 잠시 후 다시 눌러 주세요.');
                             });
                           }}
                         >
